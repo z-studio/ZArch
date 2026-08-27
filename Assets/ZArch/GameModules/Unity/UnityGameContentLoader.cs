@@ -22,8 +22,7 @@ namespace ZArch.GameModules.Unity {
             }
         }
 
-        private readonly Dictionary<string, IGameSceneProvider> m_Providers =
-            new(StringComparer.Ordinal);
+        private readonly Dictionary<string, IGameSceneProvider> m_Providers = new(StringComparer.Ordinal);
 
         public IReadOnlyDictionary<string, IGameSceneProvider> Providers => m_Providers;
 
