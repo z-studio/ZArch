@@ -13,6 +13,7 @@
 | 多游戏 | [07-大厅与多游戏模块](07-Multi-Game-Modules.md) | 以独立程序集组织大厅和多个游戏，安全切换 GameSession |
 | 速查 | [05-常用配方与 API 选择](05-Cookbook.md) | 快速找到常见业务需求的推荐写法 |
 | 上线 | [06-故障排查与生产检查表](06-Troubleshooting-and-Production.md) | 定位常见错误并完成商业项目上线检查 |
+| 维护 | [08-源码结构与维护指南](08-Codebase-Guide.md) | 理解功能目录、程序集边界和大型类型的拆分规则 |
 
 建议按顺序完成基础篇和中级篇。高级篇可以在项目真正遇到对应需求时再学习。
 
@@ -58,3 +59,5 @@ ZArch 最重要的思想不是“用了多少设计模式”，而是让对象�
 - `ZArch.GameModules.Unity`：可选的 Additive Scene 加载与显式场景入口绑定。
 
 业务程序集只引用实际需要的层。纯逻辑测试可以只引用 Core 和 Patterns。
+
+源码目录采用“程序集内按功能分组”：目录用于快速定位职责，asmdef 仍只用于真正的依赖边界。目录调整不会改变 `ZArch`、`ZArch.Unity` 或 `ZArch.GameModules` namespace。需要修改框架源码时，继续阅读[源码结构与维护指南](08-Codebase-Guide.md)。

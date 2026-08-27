@@ -1,28 +1,11 @@
 using System;
-using System.Threading;
-using System.Threading.Tasks;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 
 namespace ZArch {
-    public enum EScopeState {
-        Created,
-        Configuring,
-        Initializing,
-        Active,
-        Disposing,
-        Disposed,
-        Faulted
-    }
-
     public enum EServiceLifetime {
         Scoped,
         Transient
-    }
-
-    public enum EEventPropagation {
-        Local,
-        Parents
     }
 
     public interface IServiceResolver {
@@ -31,28 +14,6 @@ namespace ZArch {
         T Resolve<T>() where T : class;
         bool TryResolve<T>(out T instance) where T : class;
     }
-
-    public interface IBelongToScope {
-        ArchitectureScope GetScope();
-    }
-
-    public interface ICanSetScope {
-        void SetScope(ArchitectureScope scope);
-    }
-
-    public interface IInitializable {
-        void Initialize();
-    }
-
-    public interface IAsyncInitializable {
-        Task InitializeAsync(CancellationToken cancellationToken);
-    }
-
-    public interface IDeinitializable {
-        void Deinitialize();
-    }
-
-    public sealed class ArchitectureHost : Architecture { }
 
     public sealed class ServiceDebugInfo {
         public Type ServiceType { get; internal set; }

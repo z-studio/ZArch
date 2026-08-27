@@ -14,18 +14,31 @@ ZArch 以相互隔离的 **Host** 和层级化的 **Scope Tree** 为核心，用
 - [Unity 与第三方 SDK 实战](Documentation/04-Unity-and-SDK.md)
 - [常用配方与 API 选择](Documentation/05-Cookbook.md)
 - [故障排查与生产检查表](Documentation/06-Troubleshooting-and-Production.md)
+- [大厅与多游戏模块](Documentation/07-Multi-Game-Modules.md)
+- [源码结构与维护指南](Documentation/08-Codebase-Guide.md)
 
 ## 分层
 
 ```text
 Assets/ZArch
-├── Core/                  ZArch.Core：Host、Scope、服务容器、生命周期、事件
-├── Patterns/              ZArch.Patterns：Model/System、Command/Query、BindableProperty
-├── GameModules/           可选多游戏模块：GameLauncher、GameSession、Unity 场景适配
-├── Documentation/         从基础到高级的完整教程、配方与上线检查表
-├── Unity/                 ZArch.Unity：MonoBehaviour、Scene、Unity 类型适配
-│   └── Editor/            ZArch.Unity.Editor：多 Host 调试窗口
-└── Tests/Editor/          ZArch.Tests：核心行为测试
+├── Core/                          ZArch.Core：不依赖 Unity 的运行时底座
+│   ├── Architecture/              Host、Scope 创建、Host 事件和生命周期
+│   ├── Scopes/                    Scope 树、注册、解析和局部事件
+│   ├── Services/                  服务契约、注册描述和调试信息
+│   ├── Events/                    EasyEvent、TypeEventSystem、OrEvent
+│   └── Lifecycle/                 初始化契约与注销工具
+├── Patterns/                      ZArch.Patterns：可选领域组织模式
+│   ├── Binding/                   BindableProperty 及其契约
+│   ├── ModelSystem/               Model、System、Controller 与能力规则
+│   └── Operations/                Command、Query 与 Scope 执行扩展
+├── Unity/                         Unity 运行时和编辑器适配
+│   ├── Runtime/                   Hosting、Scopes、Binding、Lifecycle、Debugging
+│   └── Editor/Debugging/          多 Host 调试窗口
+├── GameModules/                   可选的多游戏会话扩展
+│   ├── Runtime/                   Contracts、Launching、Sessions
+│   └── Unity/                     Catalog、Loading、Scenes
+├── Documentation/                 教程、配方和维护指南
+└── Tests/Editor/                  按 Core、GameModules 镜像源码组织的测试
 ```
 
 依赖方向固定为：
@@ -38,6 +51,8 @@ ZArch.Core ← ZArch.Patterns ← ZArch.Unity ← ZArch.Unity.Editor
 `ZArch.Core` 和 `ZArch.Patterns` 均启用了 `noEngineReferences`，可以脱离 Unity 使用。Patterns 是可选策略层；应用也可以只引用 Core 并建立自己的领域模式。
 
 `ZArch.GameModules` 是可选的多游戏会话层，不依赖 Unity；`ZArch.GameModules.Unity` 使用 ScriptableObject Catalog 注册独立游戏模块，以 Additive Scene 加载游戏内容，并通过 `GameSceneEntry` 将场景 Controller 显式绑定到当前游戏 Scope。完整用法见[多游戏模块指南](Documentation/07-Multi-Game-Modules.md)。
+
+目录只负责源码导航，程序集负责依赖隔离。功能子目录不会额外创建 asmdef，所有公开类型仍保留原有 namespace 和 API。参与框架维护时请先阅读[源码结构与维护指南](Documentation/08-Codebase-Guide.md)。
 
 ## 设计原则
 

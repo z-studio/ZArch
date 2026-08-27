@@ -2,14 +2,6 @@ using System;
 using System.Collections.Generic;
 
 namespace ZArch {
-    public interface IUnregister {
-        void Unregister();
-    }
-
-    public interface IUnregisterList {
-        List<IUnregister> UnregisterList { get; }
-    }
-
     public static class UnregisterListExtension {
         private sealed class TrackedUnregister : IUnregister {
             private List<IUnregister> m_Owner;
@@ -70,19 +62,6 @@ namespace ZArch {
             if (exceptions != null) {
                 throw new AggregateException(exceptions);
             }
-        }
-    }
-
-    public sealed class CustomUnregister : IUnregister {
-        private Action m_OnUnregister;
-
-        public CustomUnregister(Action onUnregister) =>
-            m_OnUnregister = onUnregister ?? throw new ArgumentNullException(nameof(onUnregister));
-
-        public void Unregister() {
-            var action = m_OnUnregister;
-            m_OnUnregister = null;
-            action?.Invoke();
         }
     }
 }

@@ -1,62 +1,9 @@
 using System;
-using System.Collections.Generic;
-using System.Collections.ObjectModel;
 using System.Threading;
 using System.Threading.Tasks;
 
 namespace ZArch {
-    public abstract class Architecture : IDisposable {
-        private readonly List<ArchitectureScope> m_RootScopes = new();
-        private readonly List<ArchitectureScope> m_AllScopes = new();
-        private readonly List<ArchitectureScope> m_PendingScopes = new();
-        private readonly ReadOnlyCollection<ArchitectureScope> m_RootScopesView;
-        private readonly ReadOnlyCollection<ArchitectureScope> m_AllScopesView;
-        private readonly TypeEventSystem m_EventSystem = new();
-        private bool m_IsShuttingDown;
-        private bool m_HasStartedLifecycle;
-        private bool m_IsTerminated;
-
-        public bool IsStarted { get; private set; }
-        public Action<Exception> ExceptionHandler { get; set; }
-        public IReadOnlyList<ArchitectureScope> RootScopes => m_RootScopesView;
-        public IReadOnlyList<ArchitectureScope> Scopes => m_AllScopesView;
-        public event Action<ArchitectureScope> ScopeConfiguring;
-
-        protected Architecture() {
-            m_RootScopesView = m_RootScopes.AsReadOnly();
-            m_AllScopesView = m_AllScopes.AsReadOnly();
-        }
-
-        public void Start() {
-            if (m_IsTerminated) {
-                throw new InvalidOperationException(
-                    $"{GetType().Name} has already shutdown and cannot be restarted. Create a new instance instead."
-                );
-            }
-
-            if (m_IsShuttingDown) {
-                throw new InvalidOperationException($"{GetType().Name} is shutting down.");
-            }
-
-            if (IsStarted) {
-                throw new InvalidOperationException($"{GetType().Name} is already started.");
-            }
-
-            m_HasStartedLifecycle = true;
-
-            try {
-                OnStart();
-                IsStarted = true;
-            } catch {
-                IsStarted = false;
-                Shutdown();
-                throw;
-            }
-        }
-
-        protected virtual void OnStart() { }
-        protected virtual void OnShutdown() { }
-
+    public abstract partial class Architecture {
         public ArchitectureScope CreateRootScope(string name, Action<ArchitectureScope> setup, object tag = null) {
             EnsureStarted();
 
@@ -78,13 +25,7 @@ namespace ZArch {
                 throw new ArgumentNullException(nameof(setup));
             }
 
-            return CreateRootScopeAsync(
-                name,
-                (scope, _) => setup(scope),
-                tag,
-                null,
-                CancellationToken.None
-            );
+            return CreateRootScopeAsync(name, (scope, _) => setup(scope), tag, null, CancellationToken.None);
         }
 
         public Task<ArchitectureScope> CreateRootScopeAsync(
@@ -132,14 +73,7 @@ namespace ZArch {
                 throw new ArgumentNullException(nameof(setup));
             }
 
-            return CreateChildScopeAsync(
-                parent,
-                name,
-                (scope, _) => setup(scope),
-                tag,
-                null,
-                CancellationToken.None
-            );
+            return CreateChildScopeAsync(parent, name, (scope, _) => setup(scope), tag, null, CancellationToken.None);
         }
 
         internal Task<ArchitectureScope> CreateChildScopeAsync(
@@ -221,12 +155,10 @@ namespace ZArch {
                 }
 
                 linkedCts.Token.ThrowIfCancellationRequested();
-
                 var setupTask = setup(scope, linkedCts.Token)
                                 ?? throw new InvalidOperationException(
                                     $"Async setup for scope '{scope.Name}' returned null."
                                 );
-
                 await setupTask.ConfigureAwait(true);
                 linkedCts.Token.ThrowIfCancellationRequested();
                 ScopeConfiguring?.Invoke(scope);
@@ -275,56 +207,6 @@ namespace ZArch {
             m_RootScopes.Remove(scope);
         }
 
-        public void ReportException(Exception exception) {
-            if (exception == null) {
-                throw new ArgumentNullException(nameof(exception));
-            }
-
-            var handlers = ExceptionHandler;
-
-            if (handlers == null) {
-                return;
-            }
-
-            foreach (Action<Exception> handler in handlers.GetInvocationList()) {
-                try {
-                    handler(exception);
-                } catch {
-                    // Exception reporting must never interrupt scope cleanup.
-                }
-            }
-        }
-
-        public void SendEvent<T>() where T : new() {
-            EnsureStarted();
-            m_EventSystem.Send<T>();
-        }
-
-        public void SendEvent<T>(T message) {
-            EnsureStarted();
-            m_EventSystem.Send(message);
-        }
-
-        public IUnregister RegisterEvent<T>(Action<T> onEvent) {
-            EnsureStarted();
-
-            if (onEvent == null) {
-                throw new ArgumentNullException(nameof(onEvent));
-            }
-
-            return m_EventSystem.Register(onEvent);
-        }
-
-        public void UnregisterEvent<T>(Action<T> onEvent) {
-            EnsureStarted();
-
-            if (onEvent == null) {
-                throw new ArgumentNullException(nameof(onEvent));
-            }
-
-            m_EventSystem.Unregister(onEvent);
-        }
-
         private void ValidateParent(ArchitectureScope parent) {
             EnsureStarted();
 
@@ -345,12 +227,6 @@ namespace ZArch {
             }
         }
 
-        private void EnsureStarted() {
-            if (!IsStarted || m_IsShuttingDown) {
-                throw new InvalidOperationException("Call Architecture.Start first.");
-            }
-        }
-
         private static void ValidateTimeout(TimeSpan? timeout) {
             if (!timeout.HasValue) {
                 return;
@@ -358,48 +234,5 @@ namespace ZArch {
 
             using var validationCts = new CancellationTokenSource(timeout.Value);
         }
-
-        public void Shutdown() {
-            if (m_IsShuttingDown || m_IsTerminated) {
-                return;
-            }
-
-            m_IsShuttingDown = true;
-            IsStarted = false;
-            var callOnShutdown = m_HasStartedLifecycle;
-            m_HasStartedLifecycle = false;
-
-            try {
-                var roots = m_RootScopes.ToArray();
-
-                for (var i = roots.Length - 1; i >= 0; i--) {
-                    roots[i]?.Dispose();
-                }
-
-                var pending = m_PendingScopes.ToArray();
-
-                for (var i = pending.Length - 1; i >= 0; i--) {
-                    pending[i]?.Dispose();
-                }
-
-                if (callOnShutdown) {
-                    try {
-                        OnShutdown();
-                    } catch (Exception exception) {
-                        ReportException(exception);
-                    }
-                }
-            } finally {
-                m_RootScopes.Clear();
-                m_AllScopes.Clear();
-                m_PendingScopes.Clear();
-                m_EventSystem.Clear();
-                ScopeConfiguring = null;
-                m_IsShuttingDown = false;
-                m_IsTerminated = true;
-            }
-        }
-
-        public void Dispose() => Shutdown();
     }
 }

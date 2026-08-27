@@ -1,18 +1,6 @@
 using System;
 
 namespace ZArch {
-    public interface IReadonlyBindableProperty<T> : IEasyEvent {
-        T Value { get; }
-        IUnregister RegisterWithInitValue(Action<T> action);
-        void Unregister(Action<T> onValueChanged);
-        IUnregister Register(Action<T> onValueChanged);
-    }
-
-    public interface IBindableProperty<T> : IReadonlyBindableProperty<T> {
-        new T Value { get; set; }
-        void SetValueWithoutEvent(T newValue);
-    }
-
     public class BindableProperty<T> : IBindableProperty<T> {
         protected T mValue;
         private readonly EasyEvent<T> m_OnValueChanged = new();
