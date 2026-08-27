@@ -33,9 +33,15 @@ namespace ZArch.GameModules.Unity {
                     throw new InvalidOperationException($"{name} contains duplicate module ID '{module.Id}'.");
                 }
 
-                if (string.IsNullOrWhiteSpace(module.SceneNameOrPath)) {
+                if (string.IsNullOrWhiteSpace(module.SceneProviderId)) {
                     throw new InvalidOperationException(
-                        $"Module asset '{module.name}' has an empty scene name or path."
+                        $"Module asset '{module.name}' has an empty scene provider ID."
+                    );
+                }
+
+                if (string.IsNullOrWhiteSpace(module.SceneLocation)) {
+                    throw new InvalidOperationException(
+                        $"Module asset '{module.name}' has an empty scene location."
                     );
                 }
             }

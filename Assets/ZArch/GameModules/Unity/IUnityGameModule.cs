@@ -1,5 +1,6 @@
 namespace ZArch.GameModules.Unity {
     public interface IUnityGameModule : IGameModule {
-        string SceneNameOrPath { get; }
+        string SceneProviderId { get; }
+        string SceneLocation { get; }
     }
 }

@@ -7,11 +7,16 @@ namespace ZArch.GameModules.Unity {
         private string m_Id;
 
         [SerializeField]
-        [Tooltip("Scene name or Assets/... path loaded additively for this game.")]
-        private string m_SceneNameOrPath;
+        [Tooltip("ID of the scene provider used to load this game.")]
+        private string m_SceneProviderId = GameSceneProviderIds.kBuildSettings;
+
+        [SerializeField]
+        [Tooltip("Provider-specific scene address, key, name or path.")]
+        private string m_SceneLocation;
 
         public string Id => m_Id;
-        public string SceneNameOrPath => m_SceneNameOrPath;
+        public string SceneProviderId => m_SceneProviderId;
+        public string SceneLocation => m_SceneLocation;
 
         public abstract void Configure(
             ArchitectureScope scope,

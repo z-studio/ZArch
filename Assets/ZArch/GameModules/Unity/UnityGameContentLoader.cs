@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using UnityEngine.SceneManagement;
@@ -6,10 +7,38 @@ using UnityEngine.SceneManagement;
 namespace ZArch.GameModules.Unity {
     public sealed class UnityGameContentLoader : IGameContentLoader {
         private sealed class SceneContentHandle : IGameContentHandle {
-            public Scene Scene { get; }
+            public UnityGameContentLoader Owner { get; }
+            public IGameSceneProvider Provider { get; }
+            public IGameSceneHandle SceneHandle { get; }
 
-            public SceneContentHandle(Scene scene) {
-                Scene = scene;
+            public SceneContentHandle(
+                UnityGameContentLoader owner,
+                IGameSceneProvider provider,
+                IGameSceneHandle sceneHandle
+            ) {
+                Owner = owner;
+                Provider = provider;
+                SceneHandle = sceneHandle;
+            }
+        }
+
+        private readonly Dictionary<string, IGameSceneProvider> m_Providers =
+            new(StringComparer.Ordinal);
+
+        public IReadOnlyDictionary<string, IGameSceneProvider> Providers => m_Providers;
+
+        public UnityGameContentLoader(params IGameSceneProvider[] providers) {
+            if (providers == null) {
+                throw new ArgumentNullException(nameof(providers));
+            }
+
+            if (providers.Length == 0) {
+                RegisterProvider(new BuildSettingsGameSceneProvider(), nameof(providers));
+                return;
+            }
+
+            foreach (var provider in providers) {
+                RegisterProvider(provider, nameof(providers));
             }
         }
 
@@ -30,59 +59,88 @@ namespace ZArch.GameModules.Unity {
                 throw new ArgumentNullException(nameof(scope));
             }
 
-            if (string.IsNullOrWhiteSpace(unityModule.SceneNameOrPath)) {
-                throw new InvalidOperationException($"Game module '{module.Id}' has an empty scene name or path.");
+            var providerId = unityModule.SceneProviderId;
+            var location = unityModule.SceneLocation;
+
+            if (string.IsNullOrWhiteSpace(providerId)) {
+                throw new InvalidOperationException($"Game module '{module.Id}' has an empty scene provider ID.");
+            }
+
+            if (string.IsNullOrWhiteSpace(location)) {
+                throw new InvalidOperationException($"Game module '{module.Id}' has an empty scene location.");
+            }
+
+            if (!m_Providers.TryGetValue(providerId, out var provider)) {
+                throw new KeyNotFoundException(
+                    $"Scene provider '{providerId}' required by game module '{module.Id}' is not registered."
+                );
             }
 
             cancellationToken.ThrowIfCancellationRequested();
-            Scene loadedScene = default;
 
-            void CaptureLoadedScene(Scene scene, LoadSceneMode _) {
-                if (Matches(scene, unityModule.SceneNameOrPath)) {
-                    loadedScene = scene;
-                }
-            }
+            var sceneHandle = await provider
+                                    .LoadAsync(location, cancellationToken)
+                                    .ConfigureAwait(true);
 
-            SceneManager.sceneLoaded += CaptureLoadedScene;
-
-            try {
-                var operation = SceneManager.LoadSceneAsync(
-                    unityModule.SceneNameOrPath,
-                    LoadSceneMode.Additive
-                ) ?? throw new InvalidOperationException(
-                    $"Unity did not start loading scene '{unityModule.SceneNameOrPath}'."
-                );
-
-                while (!operation.isDone) {
-                    await Task.Yield();
-                }
-            } finally {
-                SceneManager.sceneLoaded -= CaptureLoadedScene;
-            }
-
-            if (!loadedScene.IsValid() || !loadedScene.isLoaded) {
+            if (sceneHandle == null) {
                 throw new InvalidOperationException(
-                    $"Loaded scene '{unityModule.SceneNameOrPath}' could not be identified."
+                    $"Scene provider '{provider.Id}' returned a null handle for '{location}'."
                 );
             }
 
             try {
                 cancellationToken.ThrowIfCancellationRequested();
-                var entry = FindSceneEntry(loadedScene);
+
+                var scene = sceneHandle.Scene;
+
+                if (!scene.IsValid() || !scene.isLoaded) {
+                    throw new InvalidOperationException(
+                        $"Scene provider '{provider.Id}' returned an invalid or unloaded scene for '{location}'."
+                    );
+                }
+
+                var entry = FindSceneEntry(scene);
                 entry.BindScope(scope);
-                return new SceneContentHandle(loadedScene);
+                return new SceneContentHandle(this, provider, sceneHandle);
             } catch {
-                await UnloadSceneAsync(loadedScene).ConfigureAwait(true);
+                await provider
+                      .UnloadAsync(sceneHandle, CancellationToken.None)
+                      .ConfigureAwait(true);
+
                 throw;
             }
         }
 
         public Task UnloadAsync(IGameContentHandle content, CancellationToken cancellationToken) {
-            if (content is not SceneContentHandle sceneContent) {
-                throw new ArgumentException("Content was not created by this Unity game content loader.", nameof(content));
+            if (content is not SceneContentHandle sceneContent
+                || !ReferenceEquals(sceneContent.Owner, this)) {
+                throw new ArgumentException(
+                    "Content was not created by this Unity game content loader.",
+                    nameof(content)
+                );
             }
 
-            return UnloadSceneAsync(sceneContent.Scene);
+            return sceneContent.Provider.UnloadAsync(
+                sceneContent.SceneHandle,
+                cancellationToken
+            );
+        }
+
+        private void RegisterProvider(IGameSceneProvider provider, string parameterName) {
+            if (provider == null) {
+                throw new ArgumentException("Scene providers contain null.", parameterName);
+            }
+
+            if (string.IsNullOrWhiteSpace(provider.Id)) {
+                throw new ArgumentException("A scene provider has an empty ID.", parameterName);
+            }
+
+            if (!m_Providers.TryAdd(provider.Id, provider)) {
+                throw new ArgumentException(
+                    $"Duplicate scene provider ID '{provider.Id}'.",
+                    parameterName
+                );
+            }
         }
 
         private static GameSceneEntry FindSceneEntry(Scene scene) {
@@ -100,38 +158,10 @@ namespace ZArch.GameModules.Unity {
                 }
             }
 
-            return result ?? throw new InvalidOperationException(
-                $"Scene '{scene.path}' does not contain a {nameof(GameSceneEntry)}."
-            );
-        }
-
-        private static async Task UnloadSceneAsync(Scene scene) {
-            if (!scene.IsValid() || !scene.isLoaded) {
-                return;
-            }
-
-            var operation = SceneManager.UnloadSceneAsync(scene);
-
-            if (operation == null) {
-                return;
-            }
-
-            while (!operation.isDone) {
-                await Task.Yield();
-            }
-        }
-
-        private static bool Matches(Scene scene, string nameOrPath) {
-            if (string.Equals(scene.name, nameOrPath, StringComparison.Ordinal)
-                || string.Equals(scene.path, nameOrPath, StringComparison.Ordinal)) {
-                return true;
-            }
-
-            var requestedPath = nameOrPath.EndsWith(".unity", StringComparison.Ordinal)
-                ? nameOrPath
-                : $"{nameOrPath}.unity";
-
-            return string.Equals(scene.path, requestedPath, StringComparison.Ordinal);
+            return result
+                   ?? throw new InvalidOperationException(
+                       $"Scene '{scene.path}' does not contain a {nameof(GameSceneEntry)}."
+                   );
         }
     }
 }

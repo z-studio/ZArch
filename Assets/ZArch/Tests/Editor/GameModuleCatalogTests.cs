@@ -2,8 +2,11 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using System.Threading;
+using System.Threading.Tasks;
 using NUnit.Framework;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 using ZArch.GameModules;
 using ZArch.GameModules.Unity;
 
@@ -60,8 +63,71 @@ namespace ZArch.Tests.Editor {
             Assert.Throws<InvalidOperationException>(() => catalog.ToArray());
         }
 
+        [Test]
+        public void ModuleAsset_UsesConfiguredSceneProviderAndLocation() {
+            var module = CreateModule("game-1", "game-1-address", "addressables");
+
+            Assert.That(module.SceneProviderId, Is.EqualTo("addressables"));
+            Assert.That(module.SceneLocation, Is.EqualTo("game-1-address"));
+        }
+
+        [Test]
+        public void Validate_RejectsEmptySceneProviderId() {
+            var module = CreateModule("game-1", "Game1", "");
+            var catalog = CreateCatalog(module);
+
+            var exception = Assert.Throws<InvalidOperationException>(catalog.Validate);
+
+            Assert.That(exception.Message, Does.Contain("empty scene provider ID"));
+        }
+
+        [Test]
+        public void ContentLoader_WithoutProviders_RegistersBuildSettingsProvider() {
+            var loader = new UnityGameContentLoader();
+
+            Assert.That(loader.Providers.Keys, Is.EqualTo(new[] { GameSceneProviderIds.kBuildSettings }));
+            Assert.That(loader.Providers[GameSceneProviderIds.kBuildSettings],
+                Is.TypeOf<BuildSettingsGameSceneProvider>());
+        }
+
+        [Test]
+        public void ContentLoader_RejectsDuplicateProviderIds() {
+            Assert.Throws<ArgumentException>(() => new UnityGameContentLoader(
+                new FakeSceneProvider("custom"),
+                new FakeSceneProvider("custom")
+            ));
+        }
+
+        [Test]
+        public void ContentLoader_RoutesLocationAndRollsBackInvalidProviderResult() {
+            var module = CreateModule("game-1", "game-1-address", "custom");
+            var provider = new FakeSceneProvider("custom");
+            var loader = new UnityGameContentLoader(provider);
+            var host = new ArchitectureHost();
+            host.Start();
+
+            try {
+                var scope = host.CreateRootScope("Test", _ => { });
+
+                var exception = Assert.ThrowsAsync<InvalidOperationException>(async () =>
+                    await loader.LoadAsync(
+                        module,
+                        scope,
+                        GameLaunchContext.Empty,
+                        CancellationToken.None
+                    )
+                );
+
+                Assert.That(exception.Message, Does.Contain("invalid or unloaded scene"));
+                Assert.That(provider.LoadedLocations, Is.EqualTo(new[] { "game-1-address" }));
+                Assert.That(provider.UnloadCount, Is.EqualTo(1));
+            } finally {
+                host.Dispose();
+            }
+        }
+
         [TestCase("", "Game1", "empty ID")]
-        [TestCase("game-1", "", "empty scene name or path")]
+        [TestCase("game-1", "", "empty scene location")]
         public void Validate_RejectsIncompleteModule(string id, string scene, string expectedMessage) {
             var catalog = CreateCatalog(CreateModule(id, scene));
 
@@ -70,11 +136,16 @@ namespace ZArch.Tests.Editor {
             Assert.That(exception.Message, Does.Contain(expectedMessage));
         }
 
-        private CatalogTestGameModuleAsset CreateModule(string id, string scene) {
+        private CatalogTestGameModuleAsset CreateModule(
+            string id,
+            string scene,
+            string providerId = GameSceneProviderIds.kBuildSettings
+        ) {
             var module = ScriptableObject.CreateInstance<CatalogTestGameModuleAsset>();
             module.name = string.IsNullOrEmpty(id) ? "IncompleteModule" : id;
             SetField(typeof(UnityGameModuleAsset), module, "m_Id", id);
-            SetField(typeof(UnityGameModuleAsset), module, "m_SceneNameOrPath", scene);
+            SetField(typeof(UnityGameModuleAsset), module, "m_SceneProviderId", providerId);
+            SetField(typeof(UnityGameModuleAsset), module, "m_SceneLocation", scene);
             m_Assets.Add(module);
             return module;
         }
@@ -91,6 +162,36 @@ namespace ZArch.Tests.Editor {
             var field = owner.GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic)
                         ?? throw new MissingFieldException(owner.FullName, fieldName);
             field.SetValue(target, value);
+        }
+
+        private sealed class FakeSceneProvider : IGameSceneProvider {
+            private sealed class FakeSceneHandle : IGameSceneHandle {
+                public Scene Scene => default;
+            }
+
+            public string Id { get; }
+            public List<string> LoadedLocations { get; } = new();
+            public int UnloadCount { get; private set; }
+
+            public FakeSceneProvider(string id) {
+                Id = id;
+            }
+
+            public Task<IGameSceneHandle> LoadAsync(
+                string location,
+                CancellationToken cancellationToken
+            ) {
+                LoadedLocations.Add(location);
+                return Task.FromResult<IGameSceneHandle>(new FakeSceneHandle());
+            }
+
+            public Task UnloadAsync(
+                IGameSceneHandle handle,
+                CancellationToken cancellationToken
+            ) {
+                UnloadCount++;
+                return Task.CompletedTask;
+            }
         }
     }
 

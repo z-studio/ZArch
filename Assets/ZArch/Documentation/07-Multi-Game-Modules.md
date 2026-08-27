@@ -14,7 +14,7 @@ AppRootScope
 
 同一 `GameLauncher` 只维护一个活动 `GameSession`。切换游戏时先创建并加载新 Session；如果失败，旧 Session 保持活动；成功后才卸载并 Dispose 旧 Session。
 
-Unity 游戏场景始终使用 `LoadSceneMode.Additive`。保存 `AppBootstrap` 的启动场景应常驻，游戏场景由 Launcher 加载和卸载。
+`UnityGameContentLoader` 使用可插拔的场景 Provider，并统一以 `LoadSceneMode.Additive` 加载游戏场景。保存 `AppBootstrap` 的启动场景应常驻，游戏场景由 Launcher 加载和卸载。Module 和 Launcher 不直接依赖具体资源系统。
 
 ## 2. 程序集依赖
 
@@ -101,8 +101,9 @@ public sealed class Game1ModuleAsset : UnityGameModuleAsset {
 在 Unity 中选择 `Assets → Create → Games → Game1 Module`，然后配置继承自基类的字段：
 
 ```text
-Id:                 game-1
-Scene Name Or Path: Game1
+Id:                game-1
+Scene Provider Id: build-settings
+Scene Location:    Game1
 ```
 
 Game2 使用同样方式创建 `Game2ModuleAsset` 和 `Game2Module.asset`。Module ID 区分大小写且必须唯一。
@@ -126,7 +127,7 @@ GameModuleCatalog.asset
     └── Game2Module.asset
 ```
 
-Catalog 会在启动时校验空引用、空 ID、重复 ID 和空场景名；配置错误会阻止 RootScope 启动，避免进入游戏后才暴露问题。
+Catalog 会在启动时校验空引用、空 ID、重复 ID 和空场景位置；配置错误会阻止 RootScope 启动，避免进入游戏后才暴露问题。Provider 是否已经注册由 `UnityGameContentLoader` 在进入游戏时检查。
 
 ## 5. 在 AppBootstrap 注册 Launcher
 
@@ -173,7 +174,82 @@ public sealed class AppBootstrap : ArchitectureHostBootstrap {
 
 `GameLauncher` 不持有 RootScope；只有 `GameScopeFactory` 知道 GameScope 的父节点。大厅和游戏 Controller 通过自己已绑定的 Scope 向父级解析 `IGameLauncher`，不要再从 Bootstrap 暴露 Launcher 属性。
 
-## 6. 显式绑定场景 Controller
+## 6. 选择场景 Provider
+
+`UnityGameContentLoader` 负责公共流程：按模块配置选择 Provider、加载场景、查找唯一的 `GameSceneEntry`、绑定 GameScope，并在失败时通过同一个 Provider 回滚。Provider 只负责自己的资源系统及其原生 Handle 生命周期。
+
+未传参数时自动注册内置的 `BuildSettingsGameSceneProvider`：
+
+```csharp
+var contentLoader = new UnityGameContentLoader();
+```
+
+它使用 `SceneManager.LoadSceneAsync`，因此场景必须启用在 Build Settings 中。新建 Module Asset 的 Provider ID 默认填写为 `build-settings`；如果该字段被清空，Catalog 校验会直接报错。
+
+### 6.1 混合多个资源系统
+
+每种资源系统实现 `IGameSceneProvider`，加载结果实现 `IGameSceneHandle`：
+
+```csharp
+public sealed class ProjectSceneHandle : IGameSceneHandle {
+    public Scene Scene { get; }
+
+    // 必须同时保存 Addressables AsyncOperationHandle、
+    // YooAsset SceneHandle 或项目自己的 Bundle lease。
+}
+
+public sealed class ProjectSceneProvider : IGameSceneProvider {
+    public string Id => "project-assets";
+
+    public Task<IGameSceneHandle> LoadAsync(
+        string location,
+        CancellationToken cancellationToken
+    ) {
+        // 使用资源系统加载 Additive Scene，并返回持有原生 Handle 的对象。
+    }
+
+    public Task UnloadAsync(
+        IGameSceneHandle handle,
+        CancellationToken cancellationToken
+    ) {
+        // 使用同一个原生 Handle 卸载并释放引用。
+    }
+}
+```
+
+Bootstrap 注册所有要使用的 Provider：
+
+```csharp
+var contentLoader = new UnityGameContentLoader(
+    new BuildSettingsGameSceneProvider(),
+    new AddressablesGameSceneProvider(),
+    new YooAssetGameSceneProvider(gamePackage)
+);
+```
+
+显式传入 Provider 后不会再隐式追加 Build Settings Provider；需要混用时像上面一样明确注册。Provider ID 区分大小写，并且必须非空、唯一。
+
+Module Asset 对应配置：
+
+```text
+Build Settings
+Scene Provider Id: build-settings
+Scene Location:    Assets/Games/Game1.unity
+
+Addressables
+Scene Provider Id: addressables
+Scene Location:    game-2-main-scene
+
+YooAsset
+Scene Provider Id: yooasset
+Scene Location:    Assets/Games/Game3.unity
+```
+
+Addressables 适配器应在 Handle 中保存加载得到的 `AsyncOperationHandle<SceneInstance>`，卸载时将该 Handle 交还给 `Addressables.UnloadSceneAsync`。YooAsset 适配器同样保存 `SceneHandle`，并使用当前安装版本对应的卸载/释放 API。它们应放在引用相应资源包的项目程序集或可选适配程序集里，`ZArch.GameModules.Unity` 本身不硬依赖任何第三方包。
+
+Provider 收到取消请求时，如果底层加载已经无法取消，应等待加载完成后立即卸载并释放原生 Handle，再抛出取消异常，避免泄漏 Bundle 或引用计数。
+
+## 7. 显式绑定场景 Controller
 
 每个游戏场景必须有且只有一个 `GameSceneEntry`。Entry 明确列出属于该游戏 Scope 的 Controller：
 
@@ -197,7 +273,7 @@ public sealed class Game1Entry : GameSceneEntry {
 
 场景对象的 `Awake` 早于运行期 Scope 绑定。不要在 Controller 的 `Awake` 中 Resolve；在 Entry 完成绑定后调用业务初始化，或等待用户输入、`Start` 之后的明确流程。
 
-## 7. 从大厅进入游戏
+## 8. 从大厅进入游戏
 
 大厅 Controller 仍然使用现有的显式绑定：
 
@@ -222,7 +298,7 @@ public sealed class LobbyController : ArchitectureController {
 
 `async void` 只用于 Unity Button 等事件边界，并且必须捕获异常。普通业务方法应返回 `Task`。
 
-## 8. 退出游戏
+## 9. 退出游戏
 
 ```csharp
 public async void BackToLobby() {
@@ -239,7 +315,7 @@ public async void BackToLobby() {
 
 应用主动销毁 Bootstrap 前应先等待 `ExitAsync` 完成。应用退出时，RootScope 会兜底 Dispose 当前游戏 Scope，但同步 Shutdown 不会等待 Unity 的异步场景卸载。
 
-## 9. 行为约束
+## 10. 行为约束
 
 - Module ID 区分大小写，并且必须唯一、非空。
 - 同一 Launcher 同时只允许一个 Enter/Exit；重入会抛出 `InvalidOperationException`。
