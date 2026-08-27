@@ -1,7 +1,9 @@
 using System;
+using System.Collections;
 using System.Threading;
 using System.Threading.Tasks;
 using NUnit.Framework;
+using UnityEngine.TestTools;
 
 namespace ZArch.Tests.Editor {
     [TestFixture]
@@ -286,7 +288,9 @@ namespace ZArch.Tests.Editor {
 
             var scope = m_Host.CreateRootScope("Root", configured => {
                 configured.Register(cleaned);
-                configured.Register(new CallbackService(() => throw new InvalidOperationException("Cleanup failed.")));
+                configured.Register<IDeinitializable>(
+                    new CallbackService(() => throw new InvalidOperationException("Cleanup failed."))
+                );
             });
 
             Assert.DoesNotThrow(scope.Dispose);
@@ -322,22 +326,23 @@ namespace ZArch.Tests.Editor {
             Assert.That(m_Host.Scopes, Is.Empty);
         }
 
-        [Test]
-        public void AsyncSetup_CanObserveTimeoutCancellation() {
-            Assert.ThrowsAsync<TaskCanceledException>(async () =>
-                await m_Host.CreateRootScopeAsync(
-                    "Timeout",
-                    async (_, token) => await Task.Delay(Timeout.InfiniteTimeSpan, token),
-                    timeout: TimeSpan.FromMilliseconds(20)
-                )
+        [UnityTest]
+        public IEnumerator AsyncSetup_CanObserveTimeoutCancellation() {
+            var creating = m_Host.CreateRootScopeAsync(
+                "Timeout",
+                async (_, token) => await Task.Delay(Timeout.InfiniteTimeSpan, token),
+                timeout: TimeSpan.FromMilliseconds(20)
             );
+
+            yield return WaitForTask(creating);
+            Assert.Catch<TaskCanceledException>(() => creating.GetAwaiter().GetResult());
 
             Assert.That(m_Host.RootScopes, Is.Empty);
             Assert.That(m_Host.Scopes, Is.Empty);
         }
 
-        [Test]
-        public async Task AsyncScope_IsNotPublishedUntilActivationCompletes() {
+        [UnityTest]
+        public IEnumerator AsyncScope_IsNotPublishedUntilActivationCompletes() {
             var service = new BlockingAsyncService();
             var creating = m_Host.CreateRootScopeAsync(
                 "Pending",
@@ -347,21 +352,22 @@ namespace ZArch.Tests.Editor {
                 }
             );
 
-            await service.Started.Task;
+            yield return WaitForTask(service.Started.Task);
 
             Assert.That(m_Host.RootScopes, Is.Empty);
             Assert.That(m_Host.Scopes, Is.Empty);
 
             service.Release.SetResult(true);
-            var scope = await creating;
+            yield return WaitForTask(creating);
+            var scope = creating.GetAwaiter().GetResult();
 
             Assert.That(scope.State, Is.EqualTo(EScopeState.Active));
             Assert.That(m_Host.RootScopes, Is.EqualTo(new[] { scope }));
             Assert.That(m_Host.Scopes, Is.EqualTo(new[] { scope }));
         }
 
-        [Test]
-        public async Task Shutdown_DuringAsyncInitialization_CannotReactivateDisposedScope() {
+        [UnityTest]
+        public IEnumerator Shutdown_DuringAsyncInitialization_CannotReactivateDisposedScope() {
             var service = new BlockingAsyncService();
             ArchitectureScope pendingScope = null;
             var creating = m_Host.CreateRootScopeAsync(
@@ -373,7 +379,7 @@ namespace ZArch.Tests.Editor {
                 }
             );
 
-            await service.Started.Task;
+            yield return WaitForTask(service.Started.Task);
             m_Host.Shutdown();
 
             Assert.That(pendingScope.State, Is.EqualTo(EScopeState.Disposed));
@@ -382,12 +388,13 @@ namespace ZArch.Tests.Editor {
 
             service.Release.SetResult(true);
 
-            Assert.CatchAsync<OperationCanceledException>(async () => await creating);
+            yield return WaitForTask(creating);
+            Assert.Catch<OperationCanceledException>(() => creating.GetAwaiter().GetResult());
             Assert.That(pendingScope.State, Is.EqualTo(EScopeState.Disposed));
         }
 
-        [Test]
-        public async Task DisposingParent_CancelsPendingChildActivation() {
+        [UnityTest]
+        public IEnumerator DisposingParent_CancelsPendingChildActivation() {
             var parent = m_Host.CreateRootScope("Parent", _ => { });
             var service = new BlockingAsyncService();
             ArchitectureScope pendingChild = null;
@@ -400,14 +407,15 @@ namespace ZArch.Tests.Editor {
                 }
             );
 
-            await service.Started.Task;
+            yield return WaitForTask(service.Started.Task);
             Assert.That(parent.Children, Is.Empty);
             Assert.That(m_Host.Scopes, Is.EqualTo(new[] { parent }));
 
             parent.Dispose();
             service.Release.SetResult(true);
 
-            Assert.CatchAsync<OperationCanceledException>(async () => await creating);
+            yield return WaitForTask(creating);
+            Assert.Catch<OperationCanceledException>(() => creating.GetAwaiter().GetResult());
             Assert.That(pendingChild.State, Is.EqualTo(EScopeState.Disposed));
             Assert.That(m_Host.Scopes, Is.Empty);
         }
@@ -470,6 +478,18 @@ namespace ZArch.Tests.Editor {
             public async Task InitializeAsync(CancellationToken cancellationToken) {
                 Started.TrySetResult(true);
                 await Release.Task;
+            }
+        }
+
+        private static IEnumerator WaitForTask(Task task) {
+            var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(5);
+
+            while (!task.IsCompleted) {
+                if (DateTime.UtcNow >= deadline) {
+                    Assert.Fail("Timed out waiting for the asynchronous scope operation.");
+                }
+
+                yield return null;
             }
         }
 
