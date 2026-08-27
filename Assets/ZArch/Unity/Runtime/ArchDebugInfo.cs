@@ -75,7 +75,7 @@ namespace ZArch.Unity {
                 Name = scope.Name,
                 State = scope.State,
                 Tag = scope.Tag?.ToString(),
-                BoundSceneName = scope.BoundSceneName,
+                BoundSceneName = (scope.Tag as SceneScopeTag)?.SceneName,
                 Services = services.ToArray(),
                 Children = children.ToArray()
             };

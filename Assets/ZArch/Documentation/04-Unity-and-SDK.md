@@ -114,6 +114,8 @@ m_SceneBinder.Bind("Assets/Scenes/Battle.unity", ConfigureBattle);
 - Binder Dispose 会解除监听并 Dispose 它创建的所有 Scene Scope；
 - Dispose 后 Binder 不可复用。
 
+Binder 创建的 Scope 会把 `SceneScopeTag` 放入通用的 `Scope.Tag`，其中包含 `SceneName` 和 `ScenePath`。场景元数据完全位于 Unity 层，Core 不包含 Scene 专用字段。
+
 不要把 GameModule Scene 同时注册到 `SceneScopeBinder`。Binder 是“Scene 加载后创建 Scope”，而 `GameLauncher` 是“先创建 GameScope 再加载 Scene”；同一 Scene 混用会产生两套 Scope 和两套服务生命周期。
 
 ## 5. 调试 Scope 树

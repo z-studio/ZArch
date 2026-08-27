@@ -3,6 +3,18 @@ using System.Collections.Generic;
 using UnityEngine.SceneManagement;
 
 namespace ZArch.Unity {
+    public sealed class SceneScopeTag {
+        public string SceneName { get; }
+        public string ScenePath { get; }
+
+        internal SceneScopeTag(Scene scene) {
+            SceneName = scene.name;
+            ScenePath = scene.path;
+        }
+
+        public override string ToString() => ScenePath;
+    }
+
     public sealed class SceneScopeBinder : IDisposable {
         private sealed class Binding {
             public Action<ArchitectureScope> Setup;
@@ -117,25 +129,20 @@ namespace ZArch.Unity {
             try {
                 var parent = binding.ParentSelector?.Invoke(scene);
                 var scopeName = $"Scene:{scene.name}#{scene.handle}";
+                var scopeTag = new SceneScopeTag(scene);
                 ArchitectureScope scope;
 
                 if (parent != null) {
                     scope = parent.CreateChild(
                         scopeName,
-                        child => {
-                            child.BoundSceneName = scene.name;
-                            binding.Setup(child);
-                        },
-                        scene.path
+                        binding.Setup,
+                        scopeTag
                     );
                 } else {
                     scope = m_Architecture.CreateRootScope(
                         scopeName,
-                        root => {
-                            root.BoundSceneName = scene.name;
-                            binding.Setup(root);
-                        },
-                        scene.path
+                        binding.Setup,
+                        scopeTag
                     );
                 }
 

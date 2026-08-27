@@ -239,6 +239,7 @@ protected override void OnInit() {
 ```
 
 `AbstractSystem` 和 `AbstractModel` 在 Deinitialize 时会自动执行 `UnregisterAll()`。
+`AddToUnregisterList` 返回的是受跟踪句柄；如果业务提前调用其 `Unregister()`，该句柄会立即从列表移除，不会在长生命周期 Model/System 中积累空记录。
 
 ### Scope 本地事件
 

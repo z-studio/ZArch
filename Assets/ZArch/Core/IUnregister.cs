@@ -11,6 +11,30 @@ namespace ZArch {
     }
 
     public static class UnregisterListExtension {
+        private sealed class TrackedUnregister : IUnregister {
+            private List<IUnregister> m_Owner;
+            private IUnregister m_Unregister;
+
+            public TrackedUnregister(List<IUnregister> owner, IUnregister unregister) {
+                m_Owner = owner;
+                m_Unregister = unregister;
+            }
+
+            public void Unregister() {
+                var unregister = m_Unregister;
+
+                if (unregister == null) {
+                    return;
+                }
+
+                m_Unregister = null;
+                var owner = m_Owner;
+                m_Owner = null;
+                owner?.Remove(this);
+                unregister.Unregister();
+            }
+        }
+
         public static IUnregister AddToUnregisterList(this IUnregister unregister, IUnregisterList list) {
             if (unregister == null) {
                 throw new ArgumentNullException(nameof(unregister));
@@ -20,8 +44,9 @@ namespace ZArch {
                 throw new ArgumentNullException(nameof(list));
             }
 
-            list.UnregisterList.Add(unregister);
-            return unregister;
+            var tracked = new TrackedUnregister(list.UnregisterList, unregister);
+            list.UnregisterList.Add(tracked);
+            return tracked;
         }
 
         public static void UnregisterAll(this IUnregisterList self) {
@@ -30,17 +55,17 @@ namespace ZArch {
             }
 
             List<Exception> exceptions = null;
+            var unregisters = self.UnregisterList.ToArray();
+            self.UnregisterList.Clear();
 
-            for (var i = self.UnregisterList.Count - 1; i >= 0; i--) {
+            for (var i = unregisters.Length - 1; i >= 0; i--) {
                 try {
-                    self.UnregisterList[i]?.Unregister();
+                    unregisters[i]?.Unregister();
                 } catch (Exception exception) {
                     exceptions ??= new List<Exception>();
                     exceptions.Add(exception);
                 }
             }
-
-            self.UnregisterList.Clear();
 
             if (exceptions != null) {
                 throw new AggregateException(exceptions);

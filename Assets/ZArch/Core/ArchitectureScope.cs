@@ -52,8 +52,6 @@ namespace ZArch {
         public bool IsActivated => State == EScopeState.Active;
         public bool IsActivating => State is EScopeState.Configuring or EScopeState.Initializing;
 
-        public string BoundSceneName { get; set; }
-
         public IReadOnlyList<ArchitectureScope> Children => m_ChildrenView;
         internal IReadOnlyList<object> OwnedInstances => m_OwnedInstances;
         internal IReadOnlyList<ArchitectureScope> ChildScopes => m_Children;
@@ -620,7 +618,6 @@ namespace ZArch {
             m_OwnedSet.Clear();
             m_Registrations.Clear();
             m_RegistrationOrder.Clear();
-            BoundSceneName = null;
             State = EScopeState.Disposed;
             TryCleanup(m_LifetimeCts.Dispose);
             Parent?.m_Children.Remove(this);

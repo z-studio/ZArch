@@ -298,6 +298,8 @@ subscription.UnregisterWhenGameObjectSceneUnloaded(gameObject); // GameObject �
 
 `SceneScopeBinder` 应先配置 Bind 再 Enable；启用后新增 Bind 也会立即扫描当前已加载 Scene。Binder Dispose 后不可再次启用或修改绑定。
 
+Binder 创建的 Scope 使用 Unity 层的 `SceneScopeTag` 保存场景名称与路径；Core 的 `ArchitectureScope` 只保留通用 `Tag`，不感知 Unity Scene。
+
 由 `GameLauncher` 管理的 GameModule Scene 不要同时注册到 `SceneScopeBinder`：Binder 采用“Scene 创建 Scope”，GameModules 采用“Scope 加载 Scene”，混用会为同一场景建立两套 Scope。
 
 运行时可通过 `Tools/ZArch/Arch Debug` 查看当前场景中的所有 `ArchitectureHostBootstrap`，并切换 Host 检查 Scope 树、状态与服务实例。

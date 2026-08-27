@@ -207,6 +207,24 @@ namespace ZArch.Tests.Editor {
         }
 
         [Test]
+        public void ManualUnregister_RemovesHandleFromUnregisterList() {
+            var owner = new UnregisterOwner();
+            var unregisterCount = 0;
+            var unregister = new CustomUnregister(() => unregisterCount++)
+                .AddToUnregisterList(owner);
+
+            Assert.That(owner.UnregisterList, Has.Count.EqualTo(1));
+
+            unregister.Unregister();
+
+            Assert.That(owner.UnregisterList, Is.Empty);
+            Assert.That(unregisterCount, Is.EqualTo(1));
+
+            owner.UnregisterAll();
+            Assert.That(unregisterCount, Is.EqualTo(1));
+        }
+
+        [Test]
         public void DisposingParent_DisposesChildrenBeforeParentServices() {
             var order = new System.Collections.Generic.List<string>();
             var root = m_Host.CreateRootScope("Root", scope => scope.Register(new OrderedService("root", order)));
@@ -470,6 +488,10 @@ namespace ZArch.Tests.Editor {
         private sealed class DeinitializableOnlyService : IDeinitializable {
             public int DeinitializeCount { get; private set; }
             public void Deinitialize() => DeinitializeCount++;
+        }
+
+        private sealed class UnregisterOwner : IUnregisterList {
+            public System.Collections.Generic.List<IUnregister> UnregisterList { get; } = new();
         }
 
         private sealed class OrderedService : IDeinitializable {
