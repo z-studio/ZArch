@@ -1,6 +1,6 @@
 using UnityEngine;
 
-namespace ZArch {
+namespace ZArch.Unity {
     internal static class UnityRuntimeIntegration {
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
         private static void RegisterBindableComparers() {

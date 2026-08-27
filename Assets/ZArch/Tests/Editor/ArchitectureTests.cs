@@ -3,7 +3,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using NUnit.Framework;
 
-namespace ZArch.Tests {
+namespace ZArch.Tests.Editor {
     [TestFixture]
     public sealed class ArchitectureTests {
         private ArchitectureHost m_Host;

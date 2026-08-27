@@ -10,6 +10,7 @@
 | 中级 | [02-中级篇：Scope、生命周期、事件与服务容器](02-Intermediate.md) | 组织大厅/战斗/场景模块，正确管理事件和资源 |
 | 高级 | [03-高级篇：异步、多 Host 与架构扩展](03-Advanced.md) | 接入异步服务、预览环境、多世界和复杂初始化流程 |
 | Unity | [04-Unity 与第三方 SDK 实战](04-Unity-and-SDK.md) | 使用 Bootstrap、SceneScopeBinder、安全接收 SDK 回调 |
+| 多游戏 | [07-大厅与多游戏模块](07-Multi-Game-Modules.md) | 以独立程序集组织大厅和多个游戏，安全切换 GameSession |
 | 速查 | [05-常用配方与 API 选择](05-Cookbook.md) | 快速找到常见业务需求的推荐写法 |
 | 上线 | [06-故障排查与生产检查表](06-Troubleshooting-and-Production.md) | 定位常见错误并完成商业项目上线检查 |
 
@@ -53,5 +54,7 @@ ZArch 最重要的思想不是“用了多少设计模式”，而是让对象�
 - `ZArch.Patterns`：Model、System、Utility、Command、Query、BindableProperty。
 - `ZArch.Unity`：Bootstrap、Controller、Scene 和 Unity 自动注销。
 - `ZArch.Unity.Editor`：运行时 Scope 调试窗口。
+- `ZArch.GameModules`：可选的游戏模块、Launcher、Session 与切换回滚协议。
+- `ZArch.GameModules.Unity`：可选的 Additive Scene 加载与显式场景入口绑定。
 
 业务程序集只引用实际需要的层。纯逻辑测试可以只引用 Core 和 Patterns。

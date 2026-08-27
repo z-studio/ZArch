@@ -21,6 +21,7 @@ ZArch 以相互隔离的 **Host** 和层级化的 **Scope Tree** 为核心，用
 Assets/ZArch
 ├── Core/                  ZArch.Core：Host、Scope、服务容器、生命周期、事件
 ├── Patterns/              ZArch.Patterns：Model/System、Command/Query、BindableProperty
+├── GameModules/           可选多游戏模块：GameLauncher、GameSession、Unity 场景适配
 ├── Documentation/         从基础到高级的完整教程、配方与上线检查表
 ├── Unity/                 ZArch.Unity：MonoBehaviour、Scene、Unity 类型适配
 │   └── Editor/            ZArch.Unity.Editor：多 Host 调试窗口
@@ -31,9 +32,12 @@ Assets/ZArch
 
 ```text
 ZArch.Core ← ZArch.Patterns ← ZArch.Unity ← ZArch.Unity.Editor
+     └─────← ZArch.GameModules ← ZArch.GameModules.Unity
 ```
 
 `ZArch.Core` 和 `ZArch.Patterns` 均启用了 `noEngineReferences`，可以脱离 Unity 使用。Patterns 是可选策略层；应用也可以只引用 Core 并建立自己的领域模式。
+
+`ZArch.GameModules` 是可选的多游戏会话层，不依赖 Unity；`ZArch.GameModules.Unity` 使用 ScriptableObject Catalog 注册独立游戏模块，以 Additive Scene 加载游戏内容，并通过 `GameSceneEntry` 将场景 Controller 显式绑定到当前游戏 Scope。完整用法见[多游戏模块指南](Documentation/07-Multi-Game-Modules.md)。
 
 ## 设计原则
 

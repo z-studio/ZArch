@@ -1,9 +1,11 @@
 {
-    "name": "ZArch.Tests",
-    "rootNamespace": "ZArch.Tests",
+    "name": "ZArch.Tests.Editor",
+    "rootNamespace": "",
     "references": [
         "ZArch.Core",
         "ZArch.Patterns",
+        "ZArch.GameModules",
+        "ZArch.GameModules.Unity",
         "UnityEngine.TestRunner",
         "UnityEditor.TestRunner"
     ],

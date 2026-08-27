@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using UnityEngine.SceneManagement;
 
-namespace ZArch {
+namespace ZArch.Unity {
     public sealed class SceneScopeBinder : IDisposable {
         private sealed class Binding {
             public Action<ArchitectureScope> Setup;

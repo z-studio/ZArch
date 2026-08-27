@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace ZArch {
+namespace ZArch.Unity {
     public sealed class ServiceRegistrationDebugInfo {
         public string ServiceType;
         public string ImplementationType;

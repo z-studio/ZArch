@@ -1,7 +1,7 @@
-using UnityEngine;
 using System;
+using UnityEngine;
 
-namespace ZArch {
+namespace ZArch.Unity {
     public abstract class ArchitectureHostBootstrap : MonoBehaviour {
         public Architecture Architecture { get; private set; }
         public ArchitectureScope RootScope { get; private set; }

@@ -1,7 +1,7 @@
 using UnityEditor;
 using UnityEngine;
 
-namespace ZArch.Editor {
+namespace ZArch.Unity.Editor {
     public sealed class ArchDebugWindow : EditorWindow {
         private Vector2 m_Scroll;
         private ArchDebugInfo m_Info;

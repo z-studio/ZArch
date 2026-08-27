@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
-namespace ZArch {
+namespace ZArch.Unity {
     public abstract class UnregisterTrigger : MonoBehaviour {
         private readonly HashSet<IUnregister> m_Unregisters = new();
 

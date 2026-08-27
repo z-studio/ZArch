@@ -1,7 +1,7 @@
 using System;
 using UnityEngine;
 
-namespace ZArch {
+namespace ZArch.Unity {
     public abstract class ArchitectureController : MonoBehaviour, IController {
         private ArchitectureScope m_Scope;
 
