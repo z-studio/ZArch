@@ -102,12 +102,16 @@ namespace ZArch.GameModules {
                 transitionToken.ThrowIfCancellationRequested();
                 Current = entering;
                 return entering;
-            } catch {
+            } catch (Exception enterException) {
                 if (entering != null) {
                     var cleanupException = await CleanupAsync(entering).ConfigureAwait(true);
 
                     if (cleanupException != null) {
-                        entering.Scope.Architecture.ReportException(cleanupException);
+                        throw new AggregateException(
+                            $"Entering game module '{module.Id}' failed, and rolling back the session also failed.",
+                            enterException,
+                            cleanupException
+                        );
                     }
                 }
 

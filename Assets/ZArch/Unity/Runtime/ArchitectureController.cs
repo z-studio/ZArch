@@ -16,6 +16,14 @@ namespace ZArch.Unity {
                 );
             }
 
+            if (ReferenceEquals(m_Scope, scope)) {
+                return;
+            }
+
+            if (m_Scope != null) {
+                throw new InvalidOperationException($"{GetType().Name} is already bound to scope '{m_Scope.Name}'.");
+            }
+
             m_Scope = scope;
         }
 

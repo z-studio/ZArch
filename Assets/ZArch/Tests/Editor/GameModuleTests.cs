@@ -83,6 +83,24 @@ namespace ZArch.Tests.Editor {
         }
 
         [Test]
+        public void EnterAsync_PreservesCancellationAndRollbackFailure() {
+            var launcher = CreateLauncher(new FakeModule("game-a"));
+            using var cancellation = new CancellationTokenSource();
+            m_ContentLoader.AfterLoad = cancellation.Cancel;
+            m_ContentLoader.FailUnloading = true;
+
+            var exception = Assert.ThrowsAsync<AggregateException>(async () =>
+                await launcher.EnterAsync("game-a", cancellationToken: cancellation.Token)
+            );
+
+            Assert.That(exception.InnerExceptions, Has.Count.EqualTo(2));
+            Assert.That(exception.InnerExceptions[0], Is.TypeOf<OperationCanceledException>());
+            Assert.That(exception.InnerExceptions[1].Message, Does.Contain("Failed to unload game-a"));
+            Assert.That(launcher.Current, Is.Null);
+            Assert.That(m_AppRoot.Children, Is.Empty);
+        }
+
+        [Test]
         public async Task TransitionInProgress_RejectsAnotherTransition() {
             var launcher = CreateLauncher(new FakeModule("game-a"));
             m_ContentLoader.LoadGate = new TaskCompletionSource<bool>();
@@ -199,6 +217,7 @@ namespace ZArch.Tests.Editor {
             public readonly List<string> UnloadedIds = new();
 
             public TaskCompletionSource<bool> LoadGate { get; set; }
+            public Action AfterLoad { get; set; }
             public bool FailUnloading { get; set; }
 
             public async Task<IGameContentHandle> LoadAsync(
@@ -219,6 +238,7 @@ namespace ZArch.Tests.Editor {
                     throw new InvalidOperationException($"Failed to load {module.Id}.");
                 }
 
+                AfterLoad?.Invoke();
                 return new FakeContentHandle(module.Id);
             }
 

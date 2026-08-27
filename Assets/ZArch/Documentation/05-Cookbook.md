@@ -104,7 +104,7 @@ System 自动注销：
 
 ```csharp
 protected override void OnInit() {
-    this.RegisterEvent<LoginEvent>(OnLogin)
+    this.RegisterArchitectureEvent<LoginEvent>(OnLogin)
         .AddToUnregisterList(this);
 }
 ```

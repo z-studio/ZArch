@@ -6,6 +6,30 @@ using System.Threading.Tasks;
 
 namespace ZArch {
     public sealed class ArchitectureScope : IServiceResolver, IDisposable {
+        private sealed class TrackedEventUnregister : IUnregister {
+            private ArchitectureScope m_Owner;
+            private IUnregister m_Unregister;
+
+            public TrackedEventUnregister(ArchitectureScope owner, IUnregister unregister) {
+                m_Owner = owner;
+                m_Unregister = unregister;
+            }
+
+            public void Unregister() {
+                var unregister = m_Unregister;
+
+                if (unregister == null) {
+                    return;
+                }
+
+                m_Unregister = null;
+                var owner = m_Owner;
+                m_Owner = null;
+                owner?.m_EventUnregisters.Remove(this);
+                unregister.Unregister();
+            }
+        }
+
         private readonly List<ArchitectureScope> m_Children = new();
         private readonly ReadOnlyCollection<ArchitectureScope> m_ChildrenView;
         private readonly Dictionary<Type, ServiceRegistration> m_Registrations = new();
@@ -15,7 +39,7 @@ namespace ZArch {
         private readonly List<object> m_InitializedInstances = new();
         private readonly HashSet<object> m_InitializedSet = new(ReferenceEqualityComparer.sInstance);
         private readonly TypeEventSystem m_Events = new();
-        private readonly List<IUnregister> m_EventUnregisters = new();
+        private readonly HashSet<TrackedEventUnregister> m_EventUnregisters = new();
         private readonly CancellationTokenSource m_LifetimeCts = new();
         private int m_NextRegistrationOrder;
 
@@ -199,6 +223,11 @@ namespace ZArch {
             return false;
         }
 
+        public bool IsRegisteredLocally<TService>() where TService : class {
+            EnsureNotDisposed();
+            return m_Registrations.ContainsKey(typeof(TService));
+        }
+
         private object GetOrCreate(ServiceRegistration registration) {
             if (registration.Lifetime == EServiceLifetime.Scoped && registration.Instance != null) {
                 return registration.Instance;
@@ -268,9 +297,9 @@ namespace ZArch {
                 throw new ArgumentNullException(nameof(onEvent));
             }
 
-            var unregister = m_Events.Register(onEvent);
-            m_EventUnregisters.Add(unregister);
-            return unregister;
+            var tracked = new TrackedEventUnregister(this, m_Events.Register(onEvent));
+            m_EventUnregisters.Add(tracked);
+            return tracked;
         }
 
         public void Publish<T>(T message, EEventPropagation propagation = EEventPropagation.Local) {
@@ -528,6 +557,13 @@ namespace ZArch {
             if (State is EScopeState.Disposing or EScopeState.Disposed or EScopeState.Faulted) {
                 throw new ObjectDisposedException($"Scope '{Name}' is in state {State}.");
             }
+
+            if (State is not EScopeState.Initializing and not EScopeState.Active) {
+                throw new InvalidOperationException(
+                    $"Scope '{Name}' cannot resolve services while it is in state {State}. "
+                    + "Register a factory and resolve after configuration completes."
+                );
+            }
         }
 
         private void EnsureNotDisposed() {
@@ -550,12 +586,13 @@ namespace ZArch {
 
             m_Children.Clear();
 
-            for (var i = m_EventUnregisters.Count - 1; i >= 0; i--) {
-                var unregister = m_EventUnregisters[i];
+            var eventUnregisters = new List<TrackedEventUnregister>(m_EventUnregisters);
+            m_EventUnregisters.Clear();
+
+            foreach (var unregister in eventUnregisters) {
                 TryCleanup(unregister.Unregister);
             }
 
-            m_EventUnregisters.Clear();
             m_Events.Clear();
 
             for (var i = m_InitializedInstances.Count - 1; i >= 0; i--) {

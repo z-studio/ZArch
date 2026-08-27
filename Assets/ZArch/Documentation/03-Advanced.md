@@ -114,13 +114,13 @@ Architecture 是一次性实例。调用 `Shutdown()` 或 `Dispose()` 后不能�
 
 ```csharp
 architecture.ScopeConfiguring += scope => {
-    if (!scope.TryResolve<IScopeMetrics>(out _)) {
+    if (!scope.IsRegisteredLocally<IScopeMetrics>()) {
         scope.Register<IScopeMetrics>(new ScopeMetrics(scope.Name));
     }
 };
 ```
 
-注意：回调仍处于配置阶段，可以注册服务；回调抛异常会导致当前 Scope 整体回滚。
+注意：回调仍处于配置阶段，可以注册或检查本地注册，但不能 Resolve 服务。需要依赖其他服务时应注册 Factory，让容器在初始化阶段统一解析。回调抛异常会导致当前 Scope 整体回滚。
 
 ## 7. 多 Host
 

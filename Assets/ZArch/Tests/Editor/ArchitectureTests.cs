@@ -71,6 +71,20 @@ namespace ZArch.Tests.Editor {
         }
 
         [Test]
+        public void Configuration_CanInspectRegistrationsButCannotResolveServices() {
+            Assert.Throws<InvalidOperationException>(() =>
+                m_Host.CreateRootScope("InvalidConfiguration", scope => {
+                    scope.Register(new PlainService("configured"));
+                    Assert.That(scope.IsRegisteredLocally<PlainService>(), Is.True);
+                    scope.Resolve<PlainService>();
+                })
+            );
+
+            Assert.That(m_Host.RootScopes, Is.Empty);
+            Assert.That(m_Host.Scopes, Is.Empty);
+        }
+
+        [Test]
         public async Task AsyncInitialization_CompletesBeforeScopeBecomesActive() {
             var service = new AsyncService();
             var scope = await m_Host.CreateRootScopeAsync(
@@ -450,7 +464,7 @@ namespace ZArch.Tests.Editor {
 
         private sealed class EventSenderSystem : AbstractSystem {
             protected override void OnInit() { }
-            public void Raise() => this.SendEvent(new ProbeEvent());
+            public void Raise() => this.SendArchitectureEvent(new ProbeEvent());
         }
 
         private sealed class DeinitializableOnlyService : IDeinitializable {

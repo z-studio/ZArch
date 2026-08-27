@@ -3,10 +3,13 @@ using UnityEngine;
 
 namespace ZArch.Unity {
     public abstract class ArchitectureHostBootstrap : MonoBehaviour {
+        private bool m_WasExplicitlyShutdown;
+
         public Architecture Architecture { get; private set; }
         public ArchitectureScope RootScope { get; private set; }
 
         protected virtual bool DontDestroy => true;
+        protected virtual bool RequiresExplicitShutdown => false;
         protected virtual string RootScopeName => "App";
 
         protected abstract Architecture CreateArchitecture();
@@ -31,7 +34,27 @@ namespace ZArch.Unity {
             }
         }
 
+        protected void ShutdownArchitecture() {
+            m_WasExplicitlyShutdown = true;
+            ShutdownArchitectureCore();
+        }
+
         protected virtual void OnDestroy() {
+            if (RequiresExplicitShutdown
+                && !m_WasExplicitlyShutdown
+                && Architecture != null
+                && Architecture.IsStarted) {
+                Debug.LogError(
+                    $"{GetType().Name} was destroyed before its explicit asynchronous shutdown completed. "
+                    + "Await the project's shutdown method before destroying the Bootstrap.",
+                    this
+                );
+            }
+
+            ShutdownArchitectureCore();
+        }
+
+        private void ShutdownArchitectureCore() {
             Architecture?.Shutdown();
             Architecture = null;
             RootScope = null;

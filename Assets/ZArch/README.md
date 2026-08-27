@@ -224,7 +224,7 @@ scope.Publish(damage);                           // 当前 Scope
 scope.Publish(damage, EEventPropagation.Parents); // 当前 Scope 到根
 ```
 
-`Publish` 只用于 Scope 事件；发送到当前 Host 使用 `scope.Architecture.SendEvent(message)`。Patterns 中的 `this.RegisterEvent` 与 `this.SendEvent` 都对应 Architecture 事件，注册和发送保持对称。框架没有跨 Host 的静态全局事件总线。
+`Publish` 只用于 Scope 事件；发送到当前 Host 使用 `scope.Architecture.SendEvent(message)`。Patterns 使用 `RegisterArchitectureEvent`/`SendArchitectureEvent` 与 `RegisterScopeEvent`/`PublishScopeEvent` 明确区分两级事件。框架没有跨 Host 的静态全局事件总线。
 
 事件会调用本次发送开始时的全部订阅者。某个订阅者抛异常不会阻止后续订阅者或 Parent Scope；发送结束后，所有处理器异常通过 `AggregateException` 一次性抛给发送方。
 

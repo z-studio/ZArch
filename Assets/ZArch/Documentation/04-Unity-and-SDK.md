@@ -22,6 +22,8 @@ public sealed class GameBootstrap : ArchitectureHostBootstrap {
 
 Bootstrap 的 `Awake` 会依次：创建 Architecture、Start、设置 Unity 异常处理器、创建 Root Scope。GameObject 销毁时自动 Shutdown。
 
+需要先异步释放资源的项目应覆盖 `RequiresExplicitShutdown => true`，在自己的异步关闭方法完成后调用受保护的 `ShutdownArchitecture()`。如果 Bootstrap 被直接销毁，框架会输出错误并仅执行同步兜底。
+
 一个项目可以有多个 Bootstrap，但它们会创建彼此隔离的 Host。不要无意中在多个场景重复放置同一个全局 Bootstrap。
 
 ## 2. ArchitectureController
@@ -31,6 +33,8 @@ Controller 不会搜索静态 Host，必须显式绑定：
 ```csharp
 controller.BindScope(bootstrap.RootScope);
 ```
+
+绑定同一个 Scope 是幂等操作；Controller 已绑定后不能静默改绑到另一个 Scope。需要复用 Controller 时，应让原 GameObject 随所属 Scope/Scene 销毁，而不是跨 Scope 复用旧实例。
 
 绑定后可以使用：
 

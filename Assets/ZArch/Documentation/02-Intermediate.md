@@ -229,11 +229,11 @@ host.SendEvent(new PlayerLoggedIn(playerId));
 unregister.Unregister();
 ```
 
-`AbstractSystem.RegisterEvent` 扩展默认注册到 Architecture，并且应加入 System 的注销列表：
+Architecture 级事件使用带有明确层级的扩展名，并且应加入 System 的注销列表：
 
 ```csharp
 protected override void OnInit() {
-    this.RegisterEvent<PlayerLoggedIn>(OnLoggedIn)
+    this.RegisterArchitectureEvent<PlayerLoggedIn>(OnLoggedIn)
         .AddToUnregisterList(this);
 }
 ```
@@ -250,13 +250,21 @@ scope.Publish(damage); // 只在当前 Scope
 scope.Publish(damage, EEventPropagation.Parents); // 当前 Scope 到 Root
 ```
 
+Model、System 或 Controller 内可以使用等价的明确命名：
+
+```csharp
+this.RegisterScopeEvent<DamageEvent>(OnDamage)
+    .AddToUnregisterList(this);
+this.PublishScopeEvent(damage, EEventPropagation.Parents);
+```
+
 `Publish` 只负责 Scope 内传播。发送到当前 Host 使用：
 
 ```csharp
 scope.Architecture.SendEvent(damage);
 ```
 
-Patterns 中的 `this.RegisterEvent` 和 `this.SendEvent` 都操作 Architecture 事件，因此注册与发送是对称的。团队应约定某类消息属于 Scope 还是 Host，不要在两级总线重复注册同一个处理器。
+Patterns 中的 `RegisterArchitectureEvent`、`SendArchitectureEvent` 与 `RegisterScopeEvent`、`PublishScopeEvent` 明确区分两级事件。团队应约定某类消息属于 Scope 还是 Host，不要在两级总线重复注册同一个处理器。
 
 一次发送会尝试调用全部订阅者。处理器异常不会阻断后续订阅者或 Parent Scope；发送结束后统一抛出 `AggregateException`，调用方应在事件边界记录或处理它。
 

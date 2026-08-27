@@ -144,6 +144,8 @@ public sealed class AppBootstrap : ArchitectureHostBootstrap {
     private GameModuleCatalog m_GameCatalog;
     private IGameLauncher m_GameLauncher;
 
+    protected override bool RequiresExplicitShutdown => true;
+
     protected override Architecture CreateArchitecture() =>
         new AppArchitecture();
 
@@ -175,7 +177,7 @@ public sealed class AppBootstrap : ArchitectureHostBootstrap {
             }
         } finally {
             m_GameLauncher = null;
-            Architecture?.Shutdown();
+            ShutdownArchitecture();
         }
     }
 }
@@ -184,6 +186,8 @@ public sealed class AppBootstrap : ArchitectureHostBootstrap {
 `AppBootstrap` 只知道 `GameModuleCatalog` 和 `UnityGameModuleAsset` 基类，没有出现任何 Game1/Game2 类型，所以它可以继续留在 App 程序集。将 `GameModuleCatalog.asset` 拖到启动场景中 `AppBootstrap` 的 `Game Catalog` 字段即可。
 
 `GameLauncher` 不持有 RootScope；只有 `GameScopeFactory` 知道 GameScope 的父节点。ScopeFactory 和 ContentLoader 只是 Launcher 的组装依赖，不需要注册成业务可解析服务。大厅和游戏 Controller 通过自己已绑定的 Scope 向父级解析 `IGameLauncher`，Bootstrap 只在受控关闭时保留私有引用。
+
+`RequiresExplicitShutdown` 会在 Bootstrap 未经过 `ShutdownAppAsync()` 就被销毁时输出错误。同步 `OnDestroy` 仍会执行最后的 Scope 兜底清理，但它不能代替第三方资源系统的异步卸载。
 
 ## 6. 选择场景 Provider
 
