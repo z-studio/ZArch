@@ -133,6 +133,41 @@ namespace ZArch.Tests.Editor {
         }
 
         [Test]
+        public void ArchitectureEvent_InvokesAllSubscribersBeforeThrowingAggregate() {
+            var calls = new System.Collections.Generic.List<string>();
+            m_Host.RegisterEvent<ProbeEvent>(_ => calls.Add("first"));
+            m_Host.RegisterEvent<ProbeEvent>(_ => throw new InvalidOperationException("subscriber failed"));
+            m_Host.RegisterEvent<ProbeEvent>(_ => calls.Add("last"));
+
+            var exception = Assert.Throws<AggregateException>(() =>
+                m_Host.SendEvent(new ProbeEvent())
+            );
+
+            Assert.That(calls, Is.EqualTo(new[] { "first", "last" }));
+            Assert.That(exception.InnerExceptions, Has.Count.EqualTo(1));
+            Assert.That(exception.InnerExceptions[0].Message, Is.EqualTo("subscriber failed"));
+        }
+
+        [Test]
+        public void ScopePublish_ContinuesToParentsAfterSubscriberFailure() {
+            var rootCalls = 0;
+            var childCalls = 0;
+            var root = m_Host.CreateRootScope("Root", _ => { });
+            var child = root.CreateChild("Child", _ => { });
+            child.RegisterEvent<ProbeEvent>(_ => throw new InvalidOperationException("child failed"));
+            child.RegisterEvent<ProbeEvent>(_ => childCalls++);
+            root.RegisterEvent<ProbeEvent>(_ => rootCalls++);
+
+            var exception = Assert.Throws<AggregateException>(() =>
+                child.Publish(new ProbeEvent(), EEventPropagation.Parents)
+            );
+
+            Assert.That(childCalls, Is.EqualTo(1));
+            Assert.That(rootCalls, Is.EqualTo(1));
+            Assert.That(exception.InnerExceptions, Has.Count.EqualTo(1));
+        }
+
+        [Test]
         public void PatternSendEvent_ReachesArchitectureOnly() {
             var architectureCount = 0;
             var localCount = 0;
@@ -269,6 +304,91 @@ namespace ZArch.Tests.Editor {
             Assert.That(m_Host.Scopes, Is.Empty);
         }
 
+        [Test]
+        public async Task AsyncScope_IsNotPublishedUntilActivationCompletes() {
+            var service = new BlockingAsyncService();
+            var creating = m_Host.CreateRootScopeAsync(
+                "Pending",
+                scope => {
+                    scope.Register(service);
+                    return Task.CompletedTask;
+                }
+            );
+
+            await service.Started.Task;
+
+            Assert.That(m_Host.RootScopes, Is.Empty);
+            Assert.That(m_Host.Scopes, Is.Empty);
+
+            service.Release.SetResult(true);
+            var scope = await creating;
+
+            Assert.That(scope.State, Is.EqualTo(EScopeState.Active));
+            Assert.That(m_Host.RootScopes, Is.EqualTo(new[] { scope }));
+            Assert.That(m_Host.Scopes, Is.EqualTo(new[] { scope }));
+        }
+
+        [Test]
+        public async Task Shutdown_DuringAsyncInitialization_CannotReactivateDisposedScope() {
+            var service = new BlockingAsyncService();
+            ArchitectureScope pendingScope = null;
+            var creating = m_Host.CreateRootScopeAsync(
+                "Pending",
+                scope => {
+                    pendingScope = scope;
+                    scope.Register(service);
+                    return Task.CompletedTask;
+                }
+            );
+
+            await service.Started.Task;
+            m_Host.Shutdown();
+
+            Assert.That(pendingScope.State, Is.EqualTo(EScopeState.Disposed));
+            Assert.That(m_Host.RootScopes, Is.Empty);
+            Assert.That(m_Host.Scopes, Is.Empty);
+
+            service.Release.SetResult(true);
+
+            Assert.CatchAsync<OperationCanceledException>(async () => await creating);
+            Assert.That(pendingScope.State, Is.EqualTo(EScopeState.Disposed));
+        }
+
+        [Test]
+        public async Task DisposingParent_CancelsPendingChildActivation() {
+            var parent = m_Host.CreateRootScope("Parent", _ => { });
+            var service = new BlockingAsyncService();
+            ArchitectureScope pendingChild = null;
+            var creating = parent.CreateChildAsync(
+                "PendingChild",
+                scope => {
+                    pendingChild = scope;
+                    scope.Register(service);
+                    return Task.CompletedTask;
+                }
+            );
+
+            await service.Started.Task;
+            Assert.That(parent.Children, Is.Empty);
+            Assert.That(m_Host.Scopes, Is.EqualTo(new[] { parent }));
+
+            parent.Dispose();
+            service.Release.SetResult(true);
+
+            Assert.CatchAsync<OperationCanceledException>(async () => await creating);
+            Assert.That(pendingChild.State, Is.EqualTo(EScopeState.Disposed));
+            Assert.That(m_Host.Scopes, Is.Empty);
+        }
+
+        [Test]
+        public void Shutdown_MakesArchitectureInstanceOneShot() {
+            m_Host.Shutdown();
+
+            var exception = Assert.Throws<InvalidOperationException>(m_Host.Start);
+
+            Assert.That(exception.Message, Does.Contain("cannot be restarted"));
+        }
+
         private sealed class TestModel : AbstractModel {
             public string Value { get; }
 
@@ -308,6 +428,16 @@ namespace ZArch.Tests.Editor {
             public Task InitializeAsync(CancellationToken cancellationToken) {
                 Initialized = true;
                 return Task.CompletedTask;
+            }
+        }
+
+        private sealed class BlockingAsyncService : IAsyncInitializable {
+            public TaskCompletionSource<bool> Started { get; } = new();
+            public TaskCompletionSource<bool> Release { get; } = new();
+
+            public async Task InitializeAsync(CancellationToken cancellationToken) {
+                Started.TrySetResult(true);
+                await Release.Task;
             }
         }
 

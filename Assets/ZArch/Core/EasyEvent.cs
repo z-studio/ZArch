@@ -2,6 +2,34 @@ using System;
 using System.Collections.Generic;
 
 namespace ZArch {
+    internal static class EventDispatch {
+        public static void Invoke(Delegate handlers, Action<Delegate> invoke) {
+            if (handlers == null) {
+                return;
+            }
+
+            List<Exception> exceptions = null;
+
+            foreach (var handler in handlers.GetInvocationList()) {
+                try {
+                    invoke(handler);
+                } catch (Exception exception) {
+                    exceptions ??= new List<Exception>();
+
+                    if (exception is AggregateException aggregate) {
+                        exceptions.AddRange(aggregate.Flatten().InnerExceptions);
+                    } else {
+                        exceptions.Add(exception);
+                    }
+                }
+            }
+
+            if (exceptions != null) {
+                throw new AggregateException(exceptions);
+            }
+        }
+    }
+
     public interface IEasyEvent {
         IUnregister Register(Action onEvent);
     }
@@ -29,7 +57,7 @@ namespace ZArch {
 
         public void Unregister(Action onEvent) => m_OnEvent -= onEvent;
 
-        public void Trigger() => m_OnEvent?.Invoke();
+        public void Trigger() => EventDispatch.Invoke(m_OnEvent, handler => ((Action)handler).Invoke());
     }
 
     public class EasyEvent<T> : IEasyEvent {
@@ -46,7 +74,7 @@ namespace ZArch {
 
         public void Unregister(Action<T> onEvent) => m_OnEvent -= onEvent;
 
-        public void Trigger(T t) => m_OnEvent?.Invoke(t);
+        public void Trigger(T t) => EventDispatch.Invoke(m_OnEvent, handler => ((Action<T>)handler).Invoke(t));
 
         IUnregister IEasyEvent.Register(Action onEvent) {
             if (onEvent == null) {
@@ -71,7 +99,8 @@ namespace ZArch {
 
         public void Unregister(Action<T, K> onEvent) => m_OnEvent -= onEvent;
 
-        public void Trigger(T t, K k) => m_OnEvent?.Invoke(t, k);
+        public void Trigger(T t, K k) =>
+            EventDispatch.Invoke(m_OnEvent, handler => ((Action<T, K>)handler).Invoke(t, k));
 
         IUnregister IEasyEvent.Register(Action onEvent) {
             if (onEvent == null) {
@@ -96,7 +125,8 @@ namespace ZArch {
 
         public void Unregister(Action<T, K, S> onEvent) => m_OnEvent -= onEvent;
 
-        public void Trigger(T t, K k, S s) => m_OnEvent?.Invoke(t, k, s);
+        public void Trigger(T t, K k, S s) =>
+            EventDispatch.Invoke(m_OnEvent, handler => ((Action<T, K, S>)handler).Invoke(t, k, s));
 
         IUnregister IEasyEvent.Register(Action onEvent) {
             if (onEvent == null) {
@@ -186,7 +216,7 @@ namespace ZArch {
             m_OnEvent = () => { };
         }
 
-        private void Trigger() => m_OnEvent?.Invoke();
+        private void Trigger() => EventDispatch.Invoke(m_OnEvent, handler => ((Action)handler).Invoke());
     }
 
     public static class OrEventExtensions {

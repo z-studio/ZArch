@@ -60,7 +60,7 @@ namespace ZArch.GameModules.Unity {
             }
         }
 
-        public Task UnloadAsync(IGameSceneHandle handle, CancellationToken cancellationToken) {
+        public Task UnloadAsync(IGameSceneHandle handle) {
             if (handle is not BuildSceneHandle buildHandle) {
                 throw new ArgumentException(
                     "Scene handle was not created by the Build Settings provider.",
@@ -68,7 +68,6 @@ namespace ZArch.GameModules.Unity {
                 );
             }
 
-            cancellationToken.ThrowIfCancellationRequested();
             return UnloadSceneAsync(buildHandle.Scene);
         }
 

@@ -5,40 +5,16 @@ using System.Threading;
 using System.Threading.Tasks;
 
 namespace ZArch {
-    public interface IArchitecture {
-        bool IsStarted { get; }
-        IReadOnlyList<ArchitectureScope> RootScopes { get; }
-
-        ArchitectureScope CreateRootScope(string name, Action<ArchitectureScope> setup, object tag = null);
-
-        Task<ArchitectureScope> CreateRootScopeAsync(
-            string name,
-            Func<ArchitectureScope, Task> setup,
-            object tag = null
-        );
-
-        Task<ArchitectureScope> CreateRootScopeAsync(
-            string name,
-            Func<ArchitectureScope, CancellationToken, Task> setup,
-            object tag = null,
-            TimeSpan? timeout = null,
-            CancellationToken cancellationToken = default
-        );
-
-        void SendEvent<T>() where T : new();
-        void SendEvent<T>(T message);
-        IUnregister RegisterEvent<T>(Action<T> onEvent);
-        void UnregisterEvent<T>(Action<T> onEvent);
-    }
-
-    public abstract class Architecture : IArchitecture, IDisposable {
+    public abstract class Architecture : IDisposable {
         private readonly List<ArchitectureScope> m_RootScopes = new();
         private readonly List<ArchitectureScope> m_AllScopes = new();
+        private readonly List<ArchitectureScope> m_PendingScopes = new();
         private readonly ReadOnlyCollection<ArchitectureScope> m_RootScopesView;
         private readonly ReadOnlyCollection<ArchitectureScope> m_AllScopesView;
         private readonly TypeEventSystem m_EventSystem = new();
         private bool m_IsShuttingDown;
         private bool m_HasStartedLifecycle;
+        private bool m_IsTerminated;
 
         public bool IsStarted { get; private set; }
         public Action<Exception> ExceptionHandler { get; set; }
@@ -52,6 +28,12 @@ namespace ZArch {
         }
 
         public void Start() {
+            if (m_IsTerminated) {
+                throw new InvalidOperationException(
+                    $"{GetType().Name} has already shutdown and cannot be restarted. Create a new instance instead."
+                );
+            }
+
             if (m_IsShuttingDown) {
                 throw new InvalidOperationException($"{GetType().Name} is shutting down.");
             }
@@ -182,14 +164,7 @@ namespace ZArch {
         private ArchitectureScope CreateUnconfiguredScope(string name, ArchitectureScope parent, object tag) {
             EnsureStarted();
             var scope = new ArchitectureScope(this, name, parent, tag);
-            m_AllScopes.Add(scope);
-
-            if (parent == null) {
-                m_RootScopes.Add(scope);
-            } else {
-                parent.AddChild(scope);
-            }
-
+            m_PendingScopes.Add(scope);
             return scope;
         }
 
@@ -200,6 +175,7 @@ namespace ZArch {
                 setup(scope);
                 ScopeConfiguring?.Invoke(scope);
                 scope.Activate();
+                AttachActivatedScope(scope);
             } catch {
                 scope.Dispose();
                 throw;
@@ -219,19 +195,44 @@ namespace ZArch {
 
             try {
                 timeoutCts = timeout.HasValue ? new CancellationTokenSource(timeout.Value) : null;
-                linkedCts = timeoutCts == null
-                    ? CancellationTokenSource.CreateLinkedTokenSource(cancellationToken)
-                    : CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token);
+                var parent = scope.Parent;
+
+                if (parent == null) {
+                    linkedCts = timeoutCts == null
+                        ? CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, scope.LifetimeToken)
+                        : CancellationTokenSource.CreateLinkedTokenSource(
+                            cancellationToken,
+                            timeoutCts.Token,
+                            scope.LifetimeToken
+                        );
+                } else {
+                    linkedCts = timeoutCts == null
+                        ? CancellationTokenSource.CreateLinkedTokenSource(
+                            cancellationToken,
+                            scope.LifetimeToken,
+                            parent.LifetimeToken
+                        )
+                        : CancellationTokenSource.CreateLinkedTokenSource(
+                            cancellationToken,
+                            timeoutCts.Token,
+                            scope.LifetimeToken,
+                            parent.LifetimeToken
+                        );
+                }
 
                 linkedCts.Token.ThrowIfCancellationRequested();
+
                 var setupTask = setup(scope, linkedCts.Token)
                                 ?? throw new InvalidOperationException(
                                     $"Async setup for scope '{scope.Name}' returned null."
                                 );
+
                 await setupTask.ConfigureAwait(true);
                 linkedCts.Token.ThrowIfCancellationRequested();
                 ScopeConfiguring?.Invoke(scope);
                 await scope.ActivateAsync(linkedCts.Token).ConfigureAwait(true);
+                linkedCts.Token.ThrowIfCancellationRequested();
+                AttachActivatedScope(scope);
                 return scope;
             } catch {
                 scope.Dispose();
@@ -242,7 +243,34 @@ namespace ZArch {
             }
         }
 
+        private void AttachActivatedScope(ArchitectureScope scope) {
+            EnsureStarted();
+
+            if (scope.State != EScopeState.Active) {
+                throw new InvalidOperationException(
+                    $"Scope '{scope.Name}' cannot be attached from state {scope.State}."
+                );
+            }
+
+            if (scope.Parent != null) {
+                ValidateParent(scope.Parent);
+            }
+
+            if (!m_PendingScopes.Remove(scope)) {
+                throw new InvalidOperationException($"Scope '{scope.Name}' is not pending activation.");
+            }
+
+            m_AllScopes.Add(scope);
+
+            if (scope.Parent == null) {
+                m_RootScopes.Add(scope);
+            } else {
+                scope.Parent.AddChild(scope);
+            }
+        }
+
         internal void OnScopeDisposed(ArchitectureScope scope) {
+            m_PendingScopes.Remove(scope);
             m_AllScopes.Remove(scope);
             m_RootScopes.Remove(scope);
         }
@@ -332,7 +360,7 @@ namespace ZArch {
         }
 
         public void Shutdown() {
-            if (m_IsShuttingDown) {
+            if (m_IsShuttingDown || m_IsTerminated) {
                 return;
             }
 
@@ -348,6 +376,12 @@ namespace ZArch {
                     roots[i]?.Dispose();
                 }
 
+                var pending = m_PendingScopes.ToArray();
+
+                for (var i = pending.Length - 1; i >= 0; i--) {
+                    pending[i]?.Dispose();
+                }
+
                 if (callOnShutdown) {
                     try {
                         OnShutdown();
@@ -358,9 +392,11 @@ namespace ZArch {
             } finally {
                 m_RootScopes.Clear();
                 m_AllScopes.Clear();
+                m_PendingScopes.Clear();
                 m_EventSystem.Clear();
                 ScopeConfiguring = null;
                 m_IsShuttingDown = false;
+                m_IsTerminated = true;
             }
         }
 

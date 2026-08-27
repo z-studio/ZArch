@@ -21,6 +21,8 @@ var onlineScope = await root.CreateChildAsync(
 
 异步 setup 完成后，ZArch 会按初始化顺序调用服务的异步或同步初始化，全部成功才返回 Active Scope。
 
+创建中的 Scope 不会提前出现在 `RootScopes`、`Scopes` 或 Parent 的 `Children`。Dispose 父 Scope 或 Shutdown Host 会取消仍在进行的初始化；异步实现仍必须协作观察 token。
+
 ## 2. 实现异步服务
 
 ```csharp
@@ -101,6 +103,8 @@ public sealed class GameArchitecture : Architecture {
 ```
 
 `OnShutdown` 在所有 Scope 完成销毁后调用。它只清理 `OnStart` 创建的 Host 级资源；普通业务服务仍应注册到 Scope。
+
+Architecture 是一次性实例。调用 `Shutdown()` 或 `Dispose()` 后不能再次 `Start()`，需要新一轮生命周期时创建新的 Architecture，避免上一轮异步任务污染新的 Scope 和事件。
 
 初始化失败、反初始化失败和 Dispose 失败会交给 `ExceptionHandler`。异常上报器自身抛错不会中断后续清理。
 

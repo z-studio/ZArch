@@ -71,6 +71,8 @@ var repository = battle.Resolve<IRepository>(); // 当前 Scope 没有时回退�
 host.Shutdown(); // 也可以 host.Dispose()
 ```
 
+`Architecture` 是一次性实例：`Shutdown()` 后不能再次 `Start()`；需要重新启动应用环境时创建新的 Architecture。异步创建中的 Scope 只有在全部初始化成功后才会进入 `RootScopes`、`Scopes` 或 Parent 的 `Children`。Dispose/Shutdown 会取消仍在进行的初始化，并且已销毁 Scope 不会被异步续体重新激活。
+
 `ArchitectureHost` 是可以直接实例化的通用 Host。需要 Host 级启动逻辑时继承 `Architecture`：
 
 ```csharp
@@ -224,6 +226,8 @@ scope.Publish(damage, EEventPropagation.Parents); // 当前 Scope 到根
 
 `Publish` 只用于 Scope 事件；发送到当前 Host 使用 `scope.Architecture.SendEvent(message)`。Patterns 中的 `this.RegisterEvent` 与 `this.SendEvent` 都对应 Architecture 事件，注册和发送保持对称。框架没有跨 Host 的静态全局事件总线。
 
+事件会调用本次发送开始时的全部订阅者。某个订阅者抛异常不会阻止后续订阅者或 Parent Scope；发送结束后，所有处理器异常通过 `AggregateException` 一次性抛给发送方。
+
 ## 可选 Patterns 层
 
 `ZArch.Patterns` 提供 Model/System/Controller、Command/Query 和 BindableProperty。它们都通过所属 Scope 工作，不访问默认 Host。
@@ -293,6 +297,8 @@ subscription.UnregisterWhenGameObjectSceneUnloaded(gameObject); // GameObject �
 ```
 
 `SceneScopeBinder` 应先配置 Bind 再 Enable；启用后新增 Bind 也会立即扫描当前已加载 Scene。Binder Dispose 后不可再次启用或修改绑定。
+
+由 `GameLauncher` 管理的 GameModule Scene 不要同时注册到 `SceneScopeBinder`：Binder 采用“Scene 创建 Scope”，GameModules 采用“Scope 加载 Scene”，混用会为同一场景建立两套 Scope。
 
 运行时可通过 `Tools/ZArch/Arch Debug` 查看当前场景中的所有 `ArchitectureHostBootstrap`，并切换 Host 检查 Scope 树、状态与服务实例。
 

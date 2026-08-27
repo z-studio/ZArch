@@ -258,6 +258,8 @@ scope.Architecture.SendEvent(damage);
 
 Patterns 中的 `this.RegisterEvent` 和 `this.SendEvent` 都操作 Architecture 事件，因此注册与发送是对称的。团队应约定某类消息属于 Scope 还是 Host，不要在两级总线重复注册同一个处理器。
 
+一次发送会尝试调用全部订阅者。处理器异常不会阻断后续订阅者或 Parent Scope；发送结束后统一抛出 `AggregateException`，调用方应在事件边界记录或处理它。
+
 ## 9. BindableProperty
 
 ```csharp

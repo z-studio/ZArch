@@ -5,21 +5,46 @@ using UnityEngine.SceneManagement;
 
 namespace ZArch.Unity {
     public abstract class UnregisterTrigger : MonoBehaviour {
-        private readonly HashSet<IUnregister> m_Unregisters = new();
+        private sealed class TrackedUnregister : IUnregister {
+            private UnregisterTrigger m_Owner;
+            private IUnregister m_Unregister;
+
+            public TrackedUnregister(UnregisterTrigger owner, IUnregister unregister) {
+                m_Owner = owner;
+                m_Unregister = unregister;
+            }
+
+            public void Unregister() {
+                var unregister = m_Unregister;
+
+                if (unregister == null) {
+                    return;
+                }
+
+                m_Unregister = null;
+                var owner = m_Owner;
+                m_Owner = null;
+                owner?.Remove(this);
+                unregister.Unregister();
+            }
+        }
+
+        private readonly HashSet<TrackedUnregister> m_Unregisters = new();
 
         public IUnregister AddUnregister(IUnregister unregister) {
             if (unregister == null) {
                 throw new ArgumentNullException(nameof(unregister));
             }
 
-            m_Unregisters.Add(unregister);
-            return unregister;
+            var tracked = new TrackedUnregister(this, unregister);
+            m_Unregisters.Add(tracked);
+            return tracked;
         }
 
-        public void RemoveUnregister(IUnregister unregister) => m_Unregisters.Remove(unregister);
+        private void Remove(TrackedUnregister unregister) => m_Unregisters.Remove(unregister);
 
         public void Unregister() {
-            var snapshot = new List<IUnregister>(m_Unregisters);
+            var snapshot = new List<TrackedUnregister>(m_Unregisters);
             m_Unregisters.Clear();
 
             foreach (var unregister in snapshot) {

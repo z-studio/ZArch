@@ -19,7 +19,7 @@ namespace ZArch.GameModules {
             CancellationToken cancellationToken
         );
 
-        Task UnloadAsync(IGameContentHandle content, CancellationToken cancellationToken);
+        Task UnloadAsync(IGameContentHandle content);
     }
 
     public interface IGameScopeFactory {
@@ -44,6 +44,7 @@ namespace ZArch.GameModules {
         );
 
         Task ExitAsync();
+        Task ShutdownAsync();
     }
 
     public sealed class GameLaunchContext {
@@ -75,13 +76,5 @@ namespace ZArch.GameModules {
                 $"Game launch arguments are {actual}, not {typeof(T).FullName}."
             );
         }
-    }
-
-    public enum EGameSessionState {
-        Entering,
-        Active,
-        Exiting,
-        Disposed,
-        Faulted
     }
 }

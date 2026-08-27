@@ -10,8 +10,10 @@ namespace ZArch.GameModules.Unity {
                 throw new ArgumentNullException(nameof(scope));
             }
 
-            if (scope.IsDisposed) {
-                throw new ObjectDisposedException(scope.Name);
+            if (scope.State != EScopeState.Active) {
+                throw new InvalidOperationException(
+                    $"Scope '{scope.Name}' must be Active before binding a game scene; current state is {scope.State}."
+                );
             }
 
             if (ReferenceEquals(Scope, scope)) {

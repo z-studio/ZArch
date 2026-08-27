@@ -23,6 +23,6 @@ namespace ZArch.GameModules.Unity {
 
         Task<IGameSceneHandle> LoadAsync(string location, CancellationToken cancellationToken);
 
-        Task UnloadAsync(IGameSceneHandle handle, CancellationToken cancellationToken);
+        Task UnloadAsync(IGameSceneHandle handle);
     }
 }

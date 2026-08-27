@@ -13,6 +13,8 @@
 - SDK 晚到回调是否发生在退出之后；
 - 是否在 Deinitialize/Dispose 内创建新 Scope。
 
+Architecture 在 Shutdown 后不能重新 Start；需要创建新的实例。
+
 ### Service ... is not registered
 
 原因：注册键不一致或当前 Scope 无法访问目标服务。
@@ -113,6 +115,7 @@ if (!host.IsStarted || !scope.IsActivated) {
 - MonoBehaviour 使用 Unity 自动注销扩展；
 - 约定事件传播范围，避免重复发送；
 - Event 表示已经发生的事实，不用 Event 代替有返回值的 Query。
+- 所有订阅者都会执行，异常会在发送结束后组成 `AggregateException` 抛出；事件边界必须记录或处理。
 
 ### 异步
 
@@ -146,6 +149,7 @@ if (!host.IsStarted || !scope.IsActivated) {
 - [ ] SceneScopeBinder Enable/Disable/Dispose 测试通过；
 - [ ] 关闭 Domain Reload 后重复进入 Play Mode 正常；
 - [ ] 初始化失败、timeout 和取消均不留下 Scope；
+- [ ] 异步初始化期间 Shutdown 不会让已销毁 Scope 重新 Active；
 - [ ] 异常处理器自身抛错仍能完成 Shutdown。
 
 ### 目标平台

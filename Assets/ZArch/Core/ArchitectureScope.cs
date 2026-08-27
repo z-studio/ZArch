@@ -16,6 +16,7 @@ namespace ZArch {
         private readonly HashSet<object> m_InitializedSet = new(ReferenceEqualityComparer.sInstance);
         private readonly TypeEventSystem m_Events = new();
         private readonly List<IUnregister> m_EventUnregisters = new();
+        private readonly CancellationTokenSource m_LifetimeCts = new();
         private int m_NextRegistrationOrder;
 
         public string Name { get; }
@@ -32,6 +33,7 @@ namespace ZArch {
         public IReadOnlyList<ArchitectureScope> Children => m_ChildrenView;
         internal IReadOnlyList<object> OwnedInstances => m_OwnedInstances;
         internal IReadOnlyList<ArchitectureScope> ChildScopes => m_Children;
+        internal CancellationToken LifetimeToken => m_LifetimeCts.Token;
 
         internal ArchitectureScope(Architecture architecture, string name, ArchitectureScope parent, object tag) {
             Architecture = architecture ?? throw new ArgumentNullException(nameof(architecture));
@@ -278,9 +280,25 @@ namespace ZArch {
                 throw new ArgumentOutOfRangeException(nameof(propagation), propagation, "Unknown propagation mode.");
             }
 
+            List<Exception> exceptions = null;
+
             for (var scope = this; scope != null;
                  scope = propagation == EEventPropagation.Parents ? scope.Parent : null) {
-                scope.m_Events.Send(message);
+                try {
+                    scope.m_Events.Send(message);
+                } catch (Exception exception) {
+                    exceptions ??= new List<Exception>();
+
+                    if (exception is AggregateException aggregate) {
+                        exceptions.AddRange(aggregate.Flatten().InnerExceptions);
+                    } else {
+                        exceptions.Add(exception);
+                    }
+                }
+            }
+
+            if (exceptions != null) {
+                throw new AggregateException(exceptions);
             }
         }
 
@@ -346,12 +364,16 @@ namespace ZArch {
                 foreach (var registration in OrderedRegistrations()) {
                     cancellationToken.ThrowIfCancellationRequested();
                     await InitializeAsynchronously(registration, cancellationToken).ConfigureAwait(true);
+                    EnsureInitializing(cancellationToken);
                 }
 
-                cancellationToken.ThrowIfCancellationRequested();
+                EnsureInitializing(cancellationToken);
                 State = EScopeState.Active;
             } catch {
-                State = EScopeState.Faulted;
+                if (State is not EScopeState.Disposing and not EScopeState.Disposed) {
+                    State = EScopeState.Faulted;
+                }
+
                 throw;
             }
         }
@@ -417,7 +439,9 @@ namespace ZArch {
                                          ?? throw new InvalidOperationException(
                                              $"{registration.ServiceType.FullName}.InitializeAsync returned null."
                                          );
+
                     await initializeTask.ConfigureAwait(true);
+                    EnsureInitializing(token);
                     break;
                 case IInitializable initializable:
                     initializable.Initialize();
@@ -433,6 +457,14 @@ namespace ZArch {
             }
 
             MarkInitialized(instance);
+        }
+
+        private void EnsureInitializing(CancellationToken cancellationToken) {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            if (State != EScopeState.Initializing) {
+                throw new InvalidOperationException($"Scope '{Name}' stopped initializing from state {State}.");
+            }
         }
 
         private void MarkInitialized(object instance) {
@@ -510,6 +542,7 @@ namespace ZArch {
             }
 
             State = EScopeState.Disposing;
+            TryCleanup(m_LifetimeCts.Cancel);
 
             for (var i = m_Children.Count - 1; i >= 0; i--) {
                 TryCleanup(m_Children[i].Dispose);
@@ -552,6 +585,7 @@ namespace ZArch {
             m_RegistrationOrder.Clear();
             BoundSceneName = null;
             State = EScopeState.Disposed;
+            TryCleanup(m_LifetimeCts.Dispose);
             Parent?.m_Children.Remove(this);
             Architecture.OnScopeDisposed(this);
         }

@@ -32,58 +32,54 @@ namespace ZArch.Tests.Editor {
             var session = await launcher.EnterAsync("game-a");
 
             Assert.That(launcher.Current, Is.SameAs(session));
-            Assert.That(session.State, Is.EqualTo(EGameSessionState.Active));
             Assert.That(session.Scope.Parent, Is.SameAs(m_AppRoot));
             Assert.That(session.Scope.Resolve<ModuleService>(), Is.SameAs(service));
             Assert.That(m_ContentLoader.LoadedScopes, Is.EqualTo(new[] { session.Scope }));
         }
 
         [Test]
-        public async Task EnterAsync_WhenReplacementFails_PreservesCurrentSession() {
+        public async Task EnterAsync_WhenGameIsActive_RequiresExplicitExit() {
             var gameA = new FakeModule("game-a");
             var gameB = new FakeModule("game-b");
             var launcher = CreateLauncher(gameA, gameB);
             var first = await launcher.EnterAsync("game-a");
-            m_ContentLoader.FailLoadingIds.Add("game-b");
 
-            Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            var exception = Assert.ThrowsAsync<InvalidOperationException>(async () =>
                 await launcher.EnterAsync("game-b")
             );
 
+            Assert.That(exception.Message, Does.Contain("Call ExitAsync"));
             Assert.That(launcher.Current, Is.SameAs(first));
-            Assert.That(first.State, Is.EqualTo(EGameSessionState.Active));
             Assert.That(first.Scope.IsDisposed, Is.False);
             Assert.That(m_AppRoot.Children, Has.Count.EqualTo(1));
         }
 
         [Test]
-        public async Task EnterAsync_WhenReplacementSucceeds_DisposesPreviousSession() {
+        public async Task ExitThenEnter_DisposesPreviousSessionBeforeLoadingNext() {
             var launcher = CreateLauncher(new FakeModule("game-a"), new FakeModule("game-b"));
             var first = await launcher.EnterAsync("game-a");
 
+            await launcher.ExitAsync();
             var second = await launcher.EnterAsync("game-b");
 
             Assert.That(launcher.Current, Is.SameAs(second));
-            Assert.That(first.State, Is.EqualTo(EGameSessionState.Disposed));
             Assert.That(first.Scope.IsDisposed, Is.True);
             Assert.That(m_ContentLoader.UnloadedIds, Is.EqualTo(new[] { "game-a" }));
             Assert.That(m_AppRoot.Children, Has.Count.EqualTo(1));
         }
 
         [Test]
-        public async Task EnterAsync_WhenCancelledBeforeReplacement_PreservesCurrentSession() {
-            var launcher = CreateLauncher(new FakeModule("game-a"), new FakeModule("game-b"));
-            var first = await launcher.EnterAsync("game-a");
+        public void EnterAsync_WhenCancelledBeforeCreation_DoesNotCreateSession() {
+            var launcher = CreateLauncher(new FakeModule("game-a"));
             using var cancellation = new CancellationTokenSource();
             cancellation.Cancel();
 
             Assert.CatchAsync<OperationCanceledException>(async () =>
-                await launcher.EnterAsync("game-b", cancellationToken: cancellation.Token)
+                await launcher.EnterAsync("game-a", cancellationToken: cancellation.Token)
             );
 
-            Assert.That(launcher.Current, Is.SameAs(first));
-            Assert.That(first.Scope.IsDisposed, Is.False);
-            Assert.That(m_AppRoot.Children, Has.Count.EqualTo(1));
+            Assert.That(launcher.Current, Is.Null);
+            Assert.That(m_AppRoot.Children, Is.Empty);
         }
 
         [Test]
@@ -112,7 +108,6 @@ namespace ZArch.Tests.Editor {
 
             Assert.That(launcher.Current, Is.Null);
             Assert.That(session.Scope.IsDisposed, Is.True);
-            Assert.That(session.State, Is.EqualTo(EGameSessionState.Disposed));
         }
 
         [Test]
@@ -131,6 +126,39 @@ namespace ZArch.Tests.Editor {
             Assert.That(context.GetArguments<ModuleService>(), Is.SameAs(arguments));
             Assert.That(context.TryGetArguments<string>(out _), Is.False);
             Assert.Throws<InvalidOperationException>(() => context.GetArguments<string>());
+        }
+
+        [Test]
+        public async Task ShutdownAsync_UnloadsCurrentContentAndMakesLauncherUnusable() {
+            var launcher = CreateLauncher(new FakeModule("game-a"));
+            var session = await launcher.EnterAsync("game-a");
+
+            await launcher.ShutdownAsync();
+
+            Assert.That(launcher.Current, Is.Null);
+            Assert.That(session.Scope.IsDisposed, Is.True);
+            Assert.That(m_ContentLoader.UnloadedIds, Is.EqualTo(new[] { "game-a" }));
+            Assert.ThrowsAsync<ObjectDisposedException>(async () =>
+                await launcher.EnterAsync("game-a")
+            );
+        }
+
+        [Test]
+        public async Task ShutdownAsync_CancelsAndWaitsForEnteringSession() {
+            var launcher = CreateLauncher(new FakeModule("game-a"));
+            m_ContentLoader.LoadGate = new TaskCompletionSource<bool>();
+            var entering = launcher.EnterAsync("game-a");
+
+            var shutdown = launcher.ShutdownAsync();
+
+            Assert.That(shutdown.IsCompleted, Is.False);
+            m_ContentLoader.LoadGate.SetResult(true);
+
+            Assert.CatchAsync<OperationCanceledException>(async () => await entering);
+            await shutdown;
+
+            Assert.That(launcher.Current, Is.Null);
+            Assert.That(m_AppRoot.Children, Is.Empty);
         }
 
         private GameLauncher CreateLauncher(params IGameModule[] modules) =>
@@ -194,7 +222,7 @@ namespace ZArch.Tests.Editor {
                 return new FakeContentHandle(module.Id);
             }
 
-            public Task UnloadAsync(IGameContentHandle content, CancellationToken cancellationToken) {
+            public Task UnloadAsync(IGameContentHandle content) {
                 var handle = (FakeContentHandle)content;
                 UnloadedIds.Add(handle.GameId);
 

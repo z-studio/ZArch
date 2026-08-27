@@ -24,8 +24,6 @@ namespace ZArch.GameModules.Unity {
 
         private readonly Dictionary<string, IGameSceneProvider> m_Providers = new(StringComparer.Ordinal);
 
-        public IReadOnlyDictionary<string, IGameSceneProvider> Providers => m_Providers;
-
         public UnityGameContentLoader(params IGameSceneProvider[] providers) {
             if (providers == null) {
                 throw new ArgumentNullException(nameof(providers));
@@ -101,16 +99,22 @@ namespace ZArch.GameModules.Unity {
                 var entry = FindSceneEntry(scene);
                 entry.BindScope(scope);
                 return new SceneContentHandle(this, provider, sceneHandle);
-            } catch {
-                await provider
-                      .UnloadAsync(sceneHandle, CancellationToken.None)
-                      .ConfigureAwait(true);
+            } catch (Exception loadException) {
+                try {
+                    await provider.UnloadAsync(sceneHandle).ConfigureAwait(true);
+                } catch (Exception cleanupException) {
+                    throw new AggregateException(
+                        $"Loading game content for module '{module.Id}' failed, and rolling back the scene also failed.",
+                        loadException,
+                        cleanupException
+                    );
+                }
 
                 throw;
             }
         }
 
-        public Task UnloadAsync(IGameContentHandle content, CancellationToken cancellationToken) {
+        public Task UnloadAsync(IGameContentHandle content) {
             if (content is not SceneContentHandle sceneContent
                 || !ReferenceEquals(sceneContent.Owner, this)) {
                 throw new ArgumentException(
@@ -119,10 +123,7 @@ namespace ZArch.GameModules.Unity {
                 );
             }
 
-            return sceneContent.Provider.UnloadAsync(
-                sceneContent.SceneHandle,
-                cancellationToken
-            );
+            return sceneContent.Provider.UnloadAsync(sceneContent.SceneHandle);
         }
 
         private void RegisterProvider(IGameSceneProvider provider, string parameterName) {

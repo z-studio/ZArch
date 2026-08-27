@@ -10,8 +10,10 @@ namespace ZArch.Unity {
                 throw new ArgumentNullException(nameof(scope));
             }
 
-            if (scope.IsDisposed) {
-                throw new ObjectDisposedException(scope.Name);
+            if (scope.State != EScopeState.Active) {
+                throw new InvalidOperationException(
+                    $"Scope '{scope.Name}' must be Active before binding a controller; current state is {scope.State}."
+                );
             }
 
             m_Scope = scope;

@@ -9,6 +9,10 @@ namespace ZArch.GameModules {
         private readonly IGameScopeFactory m_ScopeFactory;
         private readonly IGameContentLoader m_ContentLoader;
         private readonly Dictionary<string, IGameModule> m_Modules = new(StringComparer.Ordinal);
+        private readonly CancellationTokenSource m_LifetimeCts = new();
+        private TaskCompletionSource<bool> m_TransitionCompletion;
+        private Task m_ShutdownTask;
+        private bool m_IsShuttingDown;
         private bool m_IsDisposed;
 
         public GameSession Current { get; private set; }
@@ -64,45 +68,43 @@ namespace ZArch.GameModules {
                 throw new KeyNotFoundException($"Game module '{gameId}' is not registered.");
             }
 
+            if (Current != null) {
+                throw new InvalidOperationException(
+                    $"Game module '{Current.Module.Id}' is already active. Call ExitAsync before entering another game."
+                );
+            }
+
             BeginTransition();
             context ??= GameLaunchContext.Empty;
             GameSession entering = null;
+            CancellationTokenSource linkedCts = null;
 
             try {
-                cancellationToken.ThrowIfCancellationRequested();
+                linkedCts = CancellationTokenSource.CreateLinkedTokenSource(
+                    cancellationToken,
+                    m_LifetimeCts.Token
+                );
 
-                var scope = await m_ScopeFactory
-                                  .CreateAsync(module, context, cancellationToken)
-                                  .ConfigureAwait(true);
+                var transitionToken = linkedCts.Token;
+                transitionToken.ThrowIfCancellationRequested();
+
+                var scope = await m_ScopeFactory.CreateAsync(module, context, transitionToken).ConfigureAwait(true);
 
                 entering = new GameSession(module, context, scope);
 
-                entering.Content = await m_ContentLoader
-                                         .LoadAsync(module, scope, context, cancellationToken)
-                                         .ConfigureAwait(true);
+                entering.Content = await m_ContentLoader.LoadAsync(module, scope, context, transitionToken)
+                                                        .ConfigureAwait(true);
 
                 if (entering.Content == null) {
                     throw new InvalidOperationException($"Content loader returned null for game module '{module.Id}'.");
                 }
 
-                cancellationToken.ThrowIfCancellationRequested();
-                entering.State = EGameSessionState.Active;
-
-                var previous = Current;
-
-                if (previous != null) {
-                    var cleanupException = await CleanupAsync(previous, EGameSessionState.Disposed).ConfigureAwait(true);
-
-                    if (cleanupException != null) {
-                        previous.Scope.Architecture.ReportException(cleanupException);
-                    }
-                }
-
+                transitionToken.ThrowIfCancellationRequested();
                 Current = entering;
                 return entering;
             } catch {
                 if (entering != null) {
-                    var cleanupException = await CleanupAsync(entering, EGameSessionState.Faulted).ConfigureAwait(true);
+                    var cleanupException = await CleanupAsync(entering).ConfigureAwait(true);
 
                     if (cleanupException != null) {
                         entering.Scope.Architecture.ReportException(cleanupException);
@@ -111,7 +113,8 @@ namespace ZArch.GameModules {
 
                 throw;
             } finally {
-                IsTransitioning = false;
+                linkedCts?.Dispose();
+                EndTransition();
             }
         }
 
@@ -128,29 +131,70 @@ namespace ZArch.GameModules {
 
                 Current = null;
 
-                var cleanupException = await CleanupAsync(session, EGameSessionState.Disposed).ConfigureAwait(true);
+                var cleanupException = await CleanupAsync(session).ConfigureAwait(true);
 
                 if (cleanupException != null) {
                     ExceptionDispatchInfo.Capture(cleanupException).Throw();
                 }
             } finally {
-                IsTransitioning = false;
+                EndTransition();
             }
         }
 
-        private async Task<Exception> CleanupAsync(GameSession session, EGameSessionState finalState) {
-            if (session.State is EGameSessionState.Disposed or EGameSessionState.Faulted) {
+        public Task ShutdownAsync() {
+            if (m_ShutdownTask != null) {
+                return m_ShutdownTask;
+            }
+
+            m_ShutdownTask = ShutdownCoreAsync();
+            return m_ShutdownTask;
+        }
+
+        private async Task ShutdownCoreAsync() {
+            if (m_IsDisposed) {
+                return;
+            }
+
+            m_IsShuttingDown = true;
+            m_LifetimeCts.Cancel();
+
+            try {
+                var transition = m_TransitionCompletion?.Task;
+
+                if (transition != null) {
+                    await transition.ConfigureAwait(true);
+                }
+
+                var session = Current;
+                Current = null;
+
+                if (session == null) {
+                    return;
+                }
+
+                var cleanupException = await CleanupAsync(session).ConfigureAwait(true);
+
+                if (cleanupException != null) {
+                    ExceptionDispatchInfo.Capture(cleanupException).Throw();
+                }
+            } finally {
+                m_IsDisposed = true;
+                IsTransitioning = false;
+                m_LifetimeCts.Dispose();
+            }
+        }
+
+        private async Task<Exception> CleanupAsync(GameSession session) {
+            if (session.IsCleanedUp) {
                 return null;
             }
 
-            session.State = EGameSessionState.Exiting;
+            session.IsCleanedUp = true;
             Exception cleanupException = null;
 
             if (session.Content != null) {
                 try {
-                    await m_ContentLoader
-                          .UnloadAsync(session.Content, CancellationToken.None)
-                          .ConfigureAwait(true);
+                    await m_ContentLoader.UnloadAsync(session.Content).ConfigureAwait(true);
                 } catch (Exception exception) {
                     cleanupException = exception;
                 }
@@ -164,7 +208,6 @@ namespace ZArch.GameModules {
                     : new AggregateException(cleanupException, exception);
             }
 
-            session.State = finalState;
             return cleanupException;
         }
 
@@ -174,10 +217,18 @@ namespace ZArch.GameModules {
             }
 
             IsTransitioning = true;
+            m_TransitionCompletion = new TaskCompletionSource<bool>();
+        }
+
+        private void EndTransition() {
+            IsTransitioning = false;
+            var completion = m_TransitionCompletion;
+            m_TransitionCompletion = null;
+            completion?.TrySetResult(true);
         }
 
         private void EnsureUsable() {
-            if (m_IsDisposed) {
+            if (m_IsDisposed || m_IsShuttingDown) {
                 throw new ObjectDisposedException(nameof(GameLauncher));
             }
         }
@@ -187,12 +238,15 @@ namespace ZArch.GameModules {
                 return;
             }
 
+            m_IsShuttingDown = true;
             m_IsDisposed = true;
             IsTransitioning = false;
+            m_LifetimeCts.Cancel();
+            m_LifetimeCts.Dispose();
 
             if (Current != null) {
                 Current.Scope.Dispose();
-                Current.State = EGameSessionState.Disposed;
+                Current.IsCleanedUp = true;
                 Current = null;
             }
         }

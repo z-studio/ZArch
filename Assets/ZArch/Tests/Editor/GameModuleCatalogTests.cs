@@ -82,15 +82,6 @@ namespace ZArch.Tests.Editor {
         }
 
         [Test]
-        public void ContentLoader_WithoutProviders_RegistersBuildSettingsProvider() {
-            var loader = new UnityGameContentLoader();
-
-            Assert.That(loader.Providers.Keys, Is.EqualTo(new[] { GameSceneProviderIds.kBuildSettings }));
-            Assert.That(loader.Providers[GameSceneProviderIds.kBuildSettings],
-                Is.TypeOf<BuildSettingsGameSceneProvider>());
-        }
-
-        [Test]
         public void ContentLoader_RejectsDuplicateProviderIds() {
             Assert.Throws<ArgumentException>(() => new UnityGameContentLoader(
                 new FakeSceneProvider("custom"),
@@ -121,6 +112,34 @@ namespace ZArch.Tests.Editor {
                 Assert.That(exception.Message, Does.Contain("invalid or unloaded scene"));
                 Assert.That(provider.LoadedLocations, Is.EqualTo(new[] { "game-1-address" }));
                 Assert.That(provider.UnloadCount, Is.EqualTo(1));
+            } finally {
+                host.Dispose();
+            }
+        }
+
+        [Test]
+        public void ContentLoader_PreservesLoadAndRollbackExceptions() {
+            var module = CreateModule("game-1", "game-1-address", "custom");
+            var provider = new FakeSceneProvider("custom") { FailUnloading = true };
+            var loader = new UnityGameContentLoader(provider);
+            var host = new ArchitectureHost();
+            host.Start();
+
+            try {
+                var scope = host.CreateRootScope("Test", _ => { });
+
+                var exception = Assert.ThrowsAsync<AggregateException>(async () =>
+                    await loader.LoadAsync(
+                        module,
+                        scope,
+                        GameLaunchContext.Empty,
+                        CancellationToken.None
+                    )
+                );
+
+                Assert.That(exception.InnerExceptions, Has.Count.EqualTo(2));
+                Assert.That(exception.InnerExceptions[0].Message, Does.Contain("invalid or unloaded scene"));
+                Assert.That(exception.InnerExceptions[1].Message, Does.Contain("rollback failed"));
             } finally {
                 host.Dispose();
             }
@@ -172,6 +191,7 @@ namespace ZArch.Tests.Editor {
             public string Id { get; }
             public List<string> LoadedLocations { get; } = new();
             public int UnloadCount { get; private set; }
+            public bool FailUnloading { get; set; }
 
             public FakeSceneProvider(string id) {
                 Id = id;
@@ -185,11 +205,13 @@ namespace ZArch.Tests.Editor {
                 return Task.FromResult<IGameSceneHandle>(new FakeSceneHandle());
             }
 
-            public Task UnloadAsync(
-                IGameSceneHandle handle,
-                CancellationToken cancellationToken
-            ) {
+            public Task UnloadAsync(IGameSceneHandle handle) {
                 UnloadCount++;
+
+                if (FailUnloading) {
+                    throw new InvalidOperationException("Scene rollback failed.");
+                }
+
                 return Task.CompletedTask;
             }
         }
