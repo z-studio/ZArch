@@ -11,7 +11,7 @@ namespace ZArch {
 
     public enum EEventPropagation {
         Local,
-        Parents
+        Bubble
     }
 
     public interface IBelongToScope {

@@ -2,8 +2,8 @@ namespace ZArch {
     public interface ICanGetModel : IBelongToScope { }
     public interface ICanGetSystem : IBelongToScope { }
     public interface ICanGetUtility : IBelongToScope { }
-    public interface ICanRegisterArchitectureEvent : IBelongToScope { }
-    public interface ICanSendArchitectureEvent : IBelongToScope { }
+    public interface ICanSubscribeToArchitectureEvents : IBelongToScope { }
+    public interface ICanPublishArchitectureEvents : IBelongToScope { }
     public interface ICanSendCommand : IBelongToScope { }
     public interface ICanSendQuery : IBelongToScope { }
 
@@ -15,26 +15,29 @@ namespace ZArch {
         public static T GetUtility<T>(this ICanGetUtility self) where T : class, IUtility =>
             self.GetScope().Resolve<T>();
 
-        public static IUnregister RegisterArchitectureEvent<T>(
-            this ICanRegisterArchitectureEvent self,
+        public static IUnregister SubscribeToArchitectureEvent<T>(
+            this ICanSubscribeToArchitectureEvents self,
             System.Action<T> onEvent
         ) =>
-            self.GetScope().Architecture.RegisterEvent(onEvent);
+            self.GetScope().Architecture.Subscribe(onEvent);
 
-        public static void UnregisterArchitectureEvent<T>(
-            this ICanRegisterArchitectureEvent self,
+        public static void UnsubscribeFromArchitectureEvent<T>(
+            this ICanSubscribeToArchitectureEvents self,
             System.Action<T> onEvent
         ) =>
-            self.GetScope().Architecture.UnregisterEvent(onEvent);
+            self.GetScope().Architecture.Unsubscribe(onEvent);
 
-        public static void SendArchitectureEvent<T>(this ICanSendArchitectureEvent self) where T : new() =>
-            self.GetScope().Architecture.SendEvent<T>();
+        public static void PublishArchitectureEvent<T>(this ICanPublishArchitectureEvents self) where T : new() =>
+            self.GetScope().Architecture.Publish<T>();
 
-        public static void SendArchitectureEvent<T>(this ICanSendArchitectureEvent self, T message) =>
-            self.GetScope().Architecture.SendEvent(message);
+        public static void PublishArchitectureEvent<T>(this ICanPublishArchitectureEvents self, T message) =>
+            self.GetScope().Architecture.Publish(message);
 
-        public static IUnregister RegisterScopeEvent<T>(this IBelongToScope self, System.Action<T> onEvent) =>
-            self.GetScope().RegisterEvent(onEvent);
+        public static IUnregister SubscribeToScopeEvent<T>(this IBelongToScope self, System.Action<T> onEvent) =>
+            self.GetScope().Subscribe(onEvent);
+
+        public static void UnsubscribeFromScopeEvent<T>(this IBelongToScope self, System.Action<T> onEvent) =>
+            self.GetScope().Unsubscribe(onEvent);
 
         public static void PublishScopeEvent<T>(
             this IBelongToScope self,

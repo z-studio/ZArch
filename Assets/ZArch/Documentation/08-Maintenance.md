@@ -10,7 +10,7 @@ Assets/ZArch
 │   ├── Architecture/       Architecture、Scope 创建与架构级事件
 │   ├── Scopes/             Scope 生命周期、注册、解析和事件
 │   ├── Services/           服务注册协议
-│   ├── Events/             通用事件实现
+│   ├── Events/             Signal 原语、类型事件路由与安全分发
 │   └── Lifecycle/          初始化与注销协议
 ├── Patterns/
 │   ├── Binding/            BindableProperty
@@ -110,7 +110,7 @@ ArchitectureScope.Debug.cs
 - Scoped Factory、无所有权 Transient、Owned Transient、Alias 与循环 Factory；
 - 初始化顺序、同步/异步逆序释放、清理异常聚合与失败回滚；
 - 异步成功、取消、超时以及初始化/关闭竞态；
-- Architecture Event、Scope Event 和订阅异常；
+- Architecture 范围事件、作用域事件、冒泡和订阅异常；
 - BindableProperty 比较、立即回调和注销；
 - Scene Scope 的创建与卸载；
 - GameModuleLauncher 进入、退出、重复切换和加载失败回滚。

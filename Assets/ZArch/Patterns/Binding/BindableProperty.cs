@@ -3,7 +3,7 @@ using System;
 namespace ZArch {
     public class BindableProperty<T> : IBindableProperty<T> {
         protected T mValue;
-        private readonly EasyEvent<T> m_OnValueChanged = new();
+        private readonly Signal<T> m_OnValueChanged = new();
         private Func<T, T, bool> m_Comparer;
 
         public static Func<T, T, bool> Comparer { get; set; } = (a, b) => a == null ? b == null : a.Equals(b);
@@ -32,7 +32,7 @@ namespace ZArch {
                 }
 
                 SetValue(value);
-                m_OnValueChanged.Trigger(value);
+                m_OnValueChanged.Emit(value);
             }
         }
 
@@ -41,26 +41,26 @@ namespace ZArch {
 
         public void SetValueWithoutNotify(T newValue) => SetValue(newValue);
 
-        public IUnregister Register(Action<T> onValueChanged) =>
-            m_OnValueChanged.Register(onValueChanged ?? throw new ArgumentNullException(nameof(onValueChanged)));
+        public IUnregister Subscribe(Action<T> onValueChanged) =>
+            m_OnValueChanged.Subscribe(onValueChanged ?? throw new ArgumentNullException(nameof(onValueChanged)));
 
-        public IUnregister RegisterAndInvoke(Action<T> onValueChanged) {
+        public IUnregister SubscribeAndInvoke(Action<T> onValueChanged) {
             if (onValueChanged == null) {
                 throw new ArgumentNullException(nameof(onValueChanged));
             }
 
             onValueChanged(GetValue());
-            return Register(onValueChanged);
+            return Subscribe(onValueChanged);
         }
 
-        public void Unregister(Action<T> onValueChanged) => m_OnValueChanged.Unregister(onValueChanged);
+        public void Unsubscribe(Action<T> onValueChanged) => m_OnValueChanged.Unsubscribe(onValueChanged);
 
-        IUnregister IEasyEvent.Register(Action onEvent) {
+        IUnregister ISignal.Subscribe(Action onEvent) {
             if (onEvent == null) {
                 throw new ArgumentNullException(nameof(onEvent));
             }
 
-            return Register(_ => onEvent());
+            return Subscribe(_ => onEvent());
         }
 
         public override string ToString() => Value?.ToString();

@@ -14,7 +14,7 @@ namespace ZArch {
         private readonly HashSet<object> m_OwnedSet = new(ReferenceEqualityComparer.sInstance);
         private readonly List<object> m_InitializedInstances = new();
         private readonly HashSet<object> m_InitializedSet = new(ReferenceEqualityComparer.sInstance);
-        private readonly TypeEventSystem m_Events = new();
+        private readonly TypeEventBus m_Events = new();
         private readonly HashSet<TrackedEventUnregister> m_EventUnregisters = new();
         private readonly CancellationTokenSource m_LifetimeCts = new();
         private Task m_DisposeTask;

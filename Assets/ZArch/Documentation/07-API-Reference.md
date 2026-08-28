@@ -11,9 +11,9 @@
 | `ShutdownAsync(token)` | 等待异步反初始化后关闭 |
 | `CreateRootScope(name, setup, tag)` | 同步创建根 Scope |
 | `CreateRootScopeAsync(...)` | 异步创建根 Scope，可设置 timeout/token |
-| `RegisterEvent<T>(handler)` | 注册 Architecture 级事件 |
-| `SendEvent<T>(event)` | 发送 Architecture 级事件 |
-| `UnregisterEvent<T>(handler)` | 按处理函数解除注册 |
+| `Subscribe<T>(handler)` | 订阅 Architecture 范围事件 |
+| `Publish<T>(event)` | 发布 Architecture 范围事件 |
+| `Unsubscribe<T>(handler)` | 按处理函数取消订阅 |
 | `UnhandledExceptionHandler` | 接收框架捕获后报告的异常；为空时向调用方抛出 |
 
 ## ArchitectureScope
@@ -30,7 +30,8 @@
 | `Resolve<T>()` | 从当前 Scope 向父级解析必需服务 |
 | `TryResolve<T>(out value)` | 尝试解析可选服务 |
 | `IsRegisteredLocally<T>()` | 只检查当前 Scope |
-| `RegisterEvent<T>(handler)` | 注册 Scope 事件 |
+| `Subscribe<T>(handler)` | 订阅当前 Scope 的事件 |
+| `Unsubscribe<T>(handler)` | 按处理函数取消当前 Scope 的订阅 |
 | `Publish<T>(event, propagation)` | 向当前 Scope 或父级发布 |
 | `Dispose()` | 释放子 Scope、服务、事件与注册 |
 | `DisposeAsync(token)` | 等待异步反初始化并释放 Scope |
@@ -40,7 +41,17 @@
 - `EServiceLifetime.Scoped`：每个注册只有一个实例；
 - `EServiceLifetime.Transient`：每次解析创建实例；
 - `EEventPropagation.Local`：只发布到当前 Scope；
-- `EEventPropagation.Parents`：从当前 Scope 向父级传播。
+- `EEventPropagation.Bubble`：从当前 Scope 逐级冒泡到所有祖先 Scope。
+
+## Core Events
+
+| API | 用途 |
+| --- | --- |
+| `ISignal` | 无参数本地通知的只读订阅协议 |
+| `Signal` / `Signal<T...>` | 使用 `Subscribe / Unsubscribe / Emit` 的本地通知原语 |
+| `AnySignal` | 组合多个 `ISignal`，任意一个发出时统一通知 |
+
+`Signal` 不负责 Architecture 或 Scope 路由；按消息类型路由由 Core 内部的 `TypeEventBus` 完成。
 
 ## 生命周期
 
@@ -63,10 +74,12 @@
 | `GetUtility<T>()` | 解析 Utility |
 | `SendCommand(command)` | 执行 Command |
 | `SendQuery(query)` | 执行 Query |
-| `RegisterArchitectureEvent<T>()` | 注册 Architecture Event |
-| `SendArchitectureEvent<T>()` | 发送 Architecture Event |
-| `RegisterScopeEvent<T>()` | 注册 Scope Event |
-| `PublishScopeEvent<T>()` | 发布 Scope Event |
+| `SubscribeToArchitectureEvent<T>()` | 订阅 Architecture 范围事件 |
+| `UnsubscribeFromArchitectureEvent<T>()` | 取消 Architecture 范围事件订阅 |
+| `PublishArchitectureEvent<T>()` | 发布 Architecture 范围事件 |
+| `SubscribeToScopeEvent<T>()` | 订阅当前 Scope 的事件 |
+| `UnsubscribeFromScopeEvent<T>()` | 取消当前 Scope 的事件订阅 |
+| `PublishScopeEvent<T>()` | 发布作用域事件 |
 
 Model 与 System 的基类为 `AbstractModel`、`AbstractSystem`；Command/Query 基类为 `AbstractCommand`、`AbstractCommand<TResult>`、`AbstractQuery<TResult>`。
 
@@ -75,12 +88,12 @@ Model 与 System 的基类为 `AbstractModel`、`AbstractSystem`；Command/Query
 | API | 用途 |
 | --- | --- |
 | `Value` | 读取或修改值；变化时通知 |
-| `Register(handler)` | 监听后续变化 |
-| `RegisterAndInvoke(handler)` | 注册并立即回调当前值 |
+| `Subscribe(handler)` | 监听后续变化 |
+| `SubscribeAndInvoke(handler)` | 订阅并立即回调当前值 |
 | `SetValueWithoutNotify(value)` | 修改但不通知 |
 | `WithComparer(comparer)` | 设置实例级相等比较 |
 | `BindableProperty<T>.Comparer` | 设置类型级默认比较器 |
-| `Unregister(handler)` | 按处理函数解除监听 |
+| `Unsubscribe(handler)` | 按处理函数解除监听 |
 
 对外只读时暴露 `IReadOnlyBindableProperty<T>`，内部保留 `BindableProperty<T>`。
 

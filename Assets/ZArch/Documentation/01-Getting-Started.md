@@ -94,7 +94,7 @@ public sealed class CounterController : ArchitectureController {
         m_Button.onClick.AddListener(OnClicked);
         this.GetModel<ICounterModel>()
             .Count
-            .RegisterAndInvoke(UpdateText)
+            .SubscribeAndInvoke(UpdateText)
             .UnregisterWhenGameObjectDestroyed(gameObject);
     }
 

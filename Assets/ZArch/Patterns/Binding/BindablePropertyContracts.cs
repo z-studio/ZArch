@@ -1,11 +1,11 @@
 using System;
 
 namespace ZArch {
-    public interface IReadOnlyBindableProperty<T> : IEasyEvent {
+    public interface IReadOnlyBindableProperty<T> : ISignal {
         T Value { get; }
-        IUnregister RegisterAndInvoke(Action<T> action);
-        void Unregister(Action<T> onValueChanged);
-        IUnregister Register(Action<T> onValueChanged);
+        IUnregister SubscribeAndInvoke(Action<T> action);
+        void Unsubscribe(Action<T> onValueChanged);
+        IUnregister Subscribe(Action<T> onValueChanged);
     }
 
     public interface IBindableProperty<T> : IReadOnlyBindableProperty<T> {

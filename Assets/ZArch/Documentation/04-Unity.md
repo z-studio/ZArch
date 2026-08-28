@@ -46,7 +46,7 @@ public sealed class PlayerPanel : ArchitectureController {
     public void Initialize(ArchitectureScope scope) {
         BindScope(scope);
 
-        this.RegisterArchitectureEvent<PlayerChangedEvent>(Refresh)
+        this.SubscribeToArchitectureEvent<PlayerChangedEvent>(Refresh)
             .UnregisterWhenGameObjectDestroyed(gameObject);
 
         Refresh(default);
@@ -79,13 +79,13 @@ public sealed class SceneEntry : MonoBehaviour {
 ZArch 为 `IUnregister` 提供了 Unity 生命周期扩展：
 
 ```csharp
-this.RegisterArchitectureEvent<PlayerChangedEvent>(Refresh)
+this.SubscribeToArchitectureEvent<PlayerChangedEvent>(Refresh)
     .UnregisterWhenGameObjectDestroyed(gameObject);
 
-this.RegisterArchitectureEvent<PanelRefreshEvent>(RefreshPanel)
+this.SubscribeToArchitectureEvent<PanelRefreshEvent>(RefreshPanel)
     .UnregisterWhenDisabled(this);
 
-this.RegisterArchitectureEvent<SceneStateChangedEvent>(OnSceneStateChanged)
+this.SubscribeToArchitectureEvent<SceneStateChangedEvent>(OnSceneStateChanged)
     .UnregisterWhenGameObjectSceneUnloaded(gameObject);
 ```
 

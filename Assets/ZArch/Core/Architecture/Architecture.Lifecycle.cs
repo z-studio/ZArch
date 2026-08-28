@@ -102,7 +102,7 @@ namespace ZArch {
                 m_RootScopes.Clear();
                 m_AllScopes.Clear();
                 m_PendingScopes.Clear();
-                m_EventSystem.Clear();
+                m_Events.Clear();
                 ScopeConfiguring = null;
                 m_IsShuttingDown = false;
                 m_IsTerminated = true;
@@ -171,7 +171,7 @@ namespace ZArch {
                 m_RootScopes.Clear();
                 m_AllScopes.Clear();
                 m_PendingScopes.Clear();
-                m_EventSystem.Clear();
+                m_Events.Clear();
                 ScopeConfiguring = null;
                 m_IsShuttingDown = false;
                 m_IsTerminated = true;

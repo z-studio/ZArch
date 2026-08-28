@@ -6,10 +6,10 @@ Patterns 是可选策略层，提供 Model、System、Utility、Controller、Com
 
 | 角色 | 主要职责 | 可用能力 |
 |---|---|---|
-| Model | 保存数据和数据操作 | Utility、发送 Architecture Event |
-| System | 实现共享规则 | Model、System、Utility、Architecture Event |
-| Controller | 连接输入和表现 | Model、System、Utility、Command、Query、Architecture Event |
-| Command | 执行一次操作 | Model、System、Utility、Command、Query、Architecture Event |
+| Model | 保存数据和数据操作 | Utility、发布 Architecture 范围事件 |
+| System | 实现共享规则 | Model、System、Utility、Architecture 范围事件 |
+| Controller | 连接输入和表现 | Model、System、Utility、Command、Query、Architecture 范围事件 |
+| Command | 执行一次操作 | Model、System、Utility、Command、Query、Architecture 范围事件 |
 | Query | 读取一次结果 | Model、System、Query |
 | Utility | 基础设施 | 不获得架构能力 |
 
@@ -132,13 +132,13 @@ bool canBuy = scope.SendQuery(new CanBuyQuery(100));
 监听后续变化：
 
 ```csharp
-IUnregister subscription = model.Hp.Register(OnHpChanged);
+IUnregister subscription = model.Hp.Subscribe(OnHpChanged);
 ```
 
 监听并立即获得当前值：
 
 ```csharp
-model.Hp.RegisterAndInvoke(OnHpChanged);
+model.Hp.SubscribeAndInvoke(OnHpChanged);
 ```
 
 初始化数据但不广播：
@@ -175,14 +175,14 @@ public IReadOnlyBindableProperty<int> Hp => m_Hp;
 Model/System：
 
 ```csharp
-this.RegisterArchitectureEvent<PlayerLoggedIn>(OnLoggedIn)
+this.SubscribeToArchitectureEvent<PlayerLoggedInEvent>(OnLoggedIn)
     .AddToUnregisterList(this);
 ```
 
 Controller：
 
 ```csharp
-model.Hp.RegisterAndInvoke(UpdateHp)
+model.Hp.SubscribeAndInvoke(UpdateHp)
     .UnregisterWhenGameObjectDestroyed(gameObject);
 ```
 

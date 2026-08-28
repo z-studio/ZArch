@@ -25,11 +25,13 @@ Architecture
     └── Child Scope
         ├── 覆盖父级服务
         ├── Command / Query
-        ├── Scope Event
+        ├── Scoped Event
         └── 随 Scope 一起结束的资源
 ```
 
 Model、System 等能力接口用于表达分层权限：例如 Model 可以访问 Utility，System 可以访问 Model，Controller 可以发送 Command。它们是编译期规则，不要求业务代码手动管理依赖容器。
+
+事件分为两个明确边界：Architecture 范围事件会在单个 Architecture 内广播；作用域事件默认只发布到当前 Scope，也可以通过 `EEventPropagation.Bubble` 逐级冒泡到祖先 Scope。两者不会自动互相转发。
 
 ## Unity 快速开始
 
@@ -95,7 +97,7 @@ public sealed class CounterController : ArchitectureController {
 
         this.GetModel<ICounterModel>()
             .Count
-            .RegisterAndInvoke(count => m_Text.text = count.ToString())
+            .SubscribeAndInvoke(count => m_Text.text = count.ToString())
             .UnregisterWhenGameObjectDestroyed(gameObject);
     }
 
@@ -182,7 +184,7 @@ Core 和 Patterns 均启用 `noEngineReferences`。
 | Utility | 封装存储、网络、SDK 等基础设施 | Scope 或外部 |
 | Command | 表达一次操作或状态变更 | 调用方，执行后丢弃 |
 | Query | 表达一次读取 | 调用方，执行后丢弃 |
-| Event | 通知已经发生的事实 | Architecture 或 Scope 的事件系统 |
+| Event | 通知已经发生的事实 | Architecture 范围或 Scope 层级 |
 | BindableProperty | 保存值并通知变化 | 通常属于 Model |
 | `IUnregister` | 表示一条可取消订阅 | 订阅者 |
 

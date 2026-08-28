@@ -196,7 +196,7 @@ scope.Register(gameplay, initializationOrder: 100);
 销毁时：
 
 1. 取消 Scope 生命周期令牌，并先销毁所有子 Scope；
-2. 解除并清理 Scope Event；
+2. 解除并清理作用域事件；
 3. 按实际初始化顺序反向 `Deinitialize`；
 4. 按拥有顺序反向 `Dispose`；
 5. 清理注册表并脱离父 Scope。
@@ -212,30 +212,32 @@ await architecture.ShutdownAsync(cancellationToken);
 
 同步 `Dispose` 遇到仅支持异步清理的服务会报告错误。清理过程仍会继续处理其余服务，最后将异常交给 `UnhandledExceptionHandler`；没有设置处理器时向调用方抛出。
 
-## 6. Architecture Event 与 Scope Event
+## 6. Architecture 范围事件与作用域事件
 
-Architecture Event 在单个 Architecture 内广播：
+Architecture 范围事件在单个 Architecture 内广播。Architecture 实例已经表达事件边界，因此直接 API 统一使用 `Subscribe / Unsubscribe / Publish`：
 
 ```csharp
-var unregister = architecture.RegisterEvent<PlayerLoggedIn>(OnLoggedIn);
-architecture.SendEvent(new PlayerLoggedIn());
+var unregister = architecture.Subscribe<PlayerLoggedInEvent>(OnLoggedIn);
+architecture.Publish(new PlayerLoggedInEvent());
 unregister.Unregister();
 ```
 
-Scope Event 默认只发送到当前 Scope：
+作用域事件默认只发布到当前 Scope：
 
 ```csharp
-scope.RegisterEvent<DamageEvent>(OnDamage);
+scope.Subscribe<DamageEvent>(OnDamage);
 scope.Publish(new DamageEvent());
 ```
 
-向父级传播：
+向祖先 Scope 冒泡：
 
 ```csharp
-scope.Publish(damage, EEventPropagation.Parents);
+scope.Publish(damage, EEventPropagation.Bubble);
 ```
 
-Scope Event 不会自动进入 Architecture Event。事件处理器发生异常时，ZArch 会继续调用其余处理器，最后向发送方抛出 `AggregateException`。
+`Bubble` 的传播顺序是“当前 Scope → Parent → 更上层祖先”。作用域事件不会自动进入 Architecture 范围事件。事件处理器发生异常时，ZArch 会继续调用其余处理器，最后向发布方抛出 `AggregateException`。
+
+`Core/Events` 中的 `Signal<T>` 是无路由的本地通知原语，使用 `Subscribe / Unsubscribe / Emit`；`TypeEventBus` 是 Architecture 和 Scope 内部按消息类型路由的实现。业务层通常只需要使用 Architecture、Scope 或 `BindableProperty`，不必直接依赖内部 EventBus。
 
 ## 7. Scope 状态
 

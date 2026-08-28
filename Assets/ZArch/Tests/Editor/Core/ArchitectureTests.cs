@@ -152,10 +152,10 @@ namespace ZArch.Tests.Editor {
 
             var firstRoot = m_Architecture.CreateRootScope("Root", scope => scope.Register(firstService));
             var secondRoot = secondArchitecture.CreateRootScope("Root", scope => scope.Register(secondService));
-            m_Architecture.RegisterEvent<ProbeEvent>(_ => firstEventCount++);
-            secondArchitecture.RegisterEvent<ProbeEvent>(_ => secondEventCount++);
+            m_Architecture.Subscribe<ProbeEvent>(_ => firstEventCount++);
+            secondArchitecture.Subscribe<ProbeEvent>(_ => secondEventCount++);
 
-            m_Architecture.SendEvent(new ProbeEvent());
+            m_Architecture.Publish(new ProbeEvent());
 
             Assert.That(firstRoot.Resolve<PlainService>(), Is.SameAs(firstService));
             Assert.That(secondRoot.Resolve<PlainService>(), Is.SameAs(secondService));
@@ -164,15 +164,15 @@ namespace ZArch.Tests.Editor {
         }
 
         [Test]
-        public void ScopePublish_IsLocalAndParentsPropagationDoesNotReachArchitecture() {
+        public void ScopePublish_IsLocalAndBubblePropagationDoesNotReachArchitecture() {
             var architectureCount = 0;
             var rootCount = 0;
             var childCount = 0;
             var root = m_Architecture.CreateRootScope("Root", _ => { });
             var child = root.CreateChild("Child", _ => { });
-            m_Architecture.RegisterEvent<ProbeEvent>(_ => architectureCount++);
-            root.RegisterEvent<ProbeEvent>(_ => rootCount++);
-            child.RegisterEvent<ProbeEvent>(_ => childCount++);
+            m_Architecture.Subscribe<ProbeEvent>(_ => architectureCount++);
+            root.Subscribe<ProbeEvent>(_ => rootCount++);
+            child.Subscribe<ProbeEvent>(_ => childCount++);
 
             child.Publish(new ProbeEvent());
 
@@ -180,7 +180,7 @@ namespace ZArch.Tests.Editor {
             Assert.That(rootCount, Is.Zero);
             Assert.That(architectureCount, Is.Zero);
 
-            child.Publish(new ProbeEvent(), EEventPropagation.Parents);
+            child.Publish(new ProbeEvent(), EEventPropagation.Bubble);
 
             Assert.That(childCount, Is.EqualTo(2));
             Assert.That(rootCount, Is.EqualTo(1));
@@ -188,14 +188,27 @@ namespace ZArch.Tests.Editor {
         }
 
         [Test]
+        public void ScopeUnsubscribe_RemovesTrackedSubscription() {
+            var calls = 0;
+            var root = m_Architecture.CreateRootScope("Root", _ => { });
+            Action<ProbeEvent> handler = _ => calls++;
+
+            root.Subscribe(handler);
+            root.Unsubscribe(handler);
+            root.Publish(new ProbeEvent());
+
+            Assert.That(calls, Is.Zero);
+        }
+
+        [Test]
         public void ArchitectureEvent_InvokesAllSubscribersBeforeThrowingAggregate() {
             var calls = new System.Collections.Generic.List<string>();
-            m_Architecture.RegisterEvent<ProbeEvent>(_ => calls.Add("first"));
-            m_Architecture.RegisterEvent<ProbeEvent>(_ => throw new InvalidOperationException("subscriber failed"));
-            m_Architecture.RegisterEvent<ProbeEvent>(_ => calls.Add("last"));
+            m_Architecture.Subscribe<ProbeEvent>(_ => calls.Add("first"));
+            m_Architecture.Subscribe<ProbeEvent>(_ => throw new InvalidOperationException("subscriber failed"));
+            m_Architecture.Subscribe<ProbeEvent>(_ => calls.Add("last"));
 
             var exception = Assert.Throws<AggregateException>(() =>
-                m_Architecture.SendEvent(new ProbeEvent())
+                m_Architecture.Publish(new ProbeEvent())
             );
 
             Assert.That(calls, Is.EqualTo(new[] { "first", "last" }));
@@ -209,12 +222,12 @@ namespace ZArch.Tests.Editor {
             var childCalls = 0;
             var root = m_Architecture.CreateRootScope("Root", _ => { });
             var child = root.CreateChild("Child", _ => { });
-            child.RegisterEvent<ProbeEvent>(_ => throw new InvalidOperationException("child failed"));
-            child.RegisterEvent<ProbeEvent>(_ => childCalls++);
-            root.RegisterEvent<ProbeEvent>(_ => rootCalls++);
+            child.Subscribe<ProbeEvent>(_ => throw new InvalidOperationException("child failed"));
+            child.Subscribe<ProbeEvent>(_ => childCalls++);
+            root.Subscribe<ProbeEvent>(_ => rootCalls++);
 
             var exception = Assert.Throws<AggregateException>(() =>
-                child.Publish(new ProbeEvent(), EEventPropagation.Parents)
+                child.Publish(new ProbeEvent(), EEventPropagation.Bubble)
             );
 
             Assert.That(childCalls, Is.EqualTo(1));
@@ -223,13 +236,13 @@ namespace ZArch.Tests.Editor {
         }
 
         [Test]
-        public void PatternSendEvent_ReachesArchitectureOnly() {
+        public void PatternPublishEvent_ReachesArchitectureOnly() {
             var architectureCount = 0;
             var localCount = 0;
             EventSenderSystem sender = null;
             var root = m_Architecture.CreateRootScope("Root", scope => scope.Register(sender = new EventSenderSystem()));
-            m_Architecture.RegisterEvent<ProbeEvent>(_ => architectureCount++);
-            root.RegisterEvent<ProbeEvent>(_ => localCount++);
+            m_Architecture.Subscribe<ProbeEvent>(_ => architectureCount++);
+            root.Subscribe<ProbeEvent>(_ => localCount++);
 
             sender.Raise();
 
@@ -608,7 +621,7 @@ namespace ZArch.Tests.Editor {
 
         private sealed class EventSenderSystem : AbstractSystem {
             protected override void OnInit() { }
-            public void Raise() => this.SendArchitectureEvent(new ProbeEvent());
+            public void Raise() => this.PublishArchitectureEvent(new ProbeEvent());
         }
 
         private sealed class DeinitializableOnlyService : IDeinitializable {

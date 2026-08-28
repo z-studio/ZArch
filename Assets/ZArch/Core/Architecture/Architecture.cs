@@ -10,7 +10,7 @@ namespace ZArch {
         private readonly List<ArchitectureScope> m_PendingScopes = new();
         private readonly ReadOnlyCollection<ArchitectureScope> m_RootScopesView;
         private readonly ReadOnlyCollection<ArchitectureScope> m_AllScopesView;
-        private readonly TypeEventSystem m_EventSystem = new();
+        private readonly TypeEventBus m_Events = new();
         private bool m_IsShuttingDown;
         private bool m_HasStartedLifecycle;
         private bool m_IsTerminated;
