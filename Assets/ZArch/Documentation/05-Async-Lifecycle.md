@@ -9,18 +9,15 @@ using System.Threading;
 using System.Threading.Tasks;
 using ZArch;
 
-public sealed class OnlineService : IAsyncInitializable, IAsyncDeinitializable
-{
+public sealed class OnlineService : IAsyncInitializable, IAsyncDeinitializable {
     private bool m_Connected;
 
-    public async Task InitializeAsync(CancellationToken cancellationToken)
-    {
+    public async Task InitializeAsync(CancellationToken cancellationToken) {
         await ConnectAsync(cancellationToken);
         m_Connected = true;
     }
 
-    public async Task DeinitializeAsync(CancellationToken cancellationToken)
-    {
+    public async Task DeinitializeAsync(CancellationToken cancellationToken) {
         if (!m_Connected) return;
         await DisconnectAsync(cancellationToken);
         m_Connected = false;
@@ -48,8 +45,7 @@ using var cancellation = new CancellationTokenSource();
 
 var root = await architecture.CreateRootScopeAsync(
     "Root",
-    (scope, token) =>
-    {
+    (scope, token) => {
         scope.Register<OnlineService>(new OnlineService());
         return Task.CompletedTask;
     },
@@ -62,8 +58,7 @@ var root = await architecture.CreateRootScopeAsync(
 ```csharp
 var battle = await root.CreateChildAsync(
     "Battle",
-    (scope, token) =>
-    {
+    (scope, token) => {
         scope.Register<BattlePreloader>(new BattlePreloader());
         return Task.CompletedTask;
     },
@@ -129,12 +124,10 @@ using System.Threading.Tasks;
 using ZArch;
 using ZArch.Unity;
 
-public sealed class GameBootstrap : AsyncArchitectureBootstrap
-{
+public sealed class GameBootstrap : AsyncArchitectureBootstrap {
     protected override Task ConfigureRootAsync(
         ArchitectureScope scope,
-        CancellationToken cancellationToken)
-    {
+        CancellationToken cancellationToken) {
         scope.Register<OnlineService>(new OnlineService());
         return Task.CompletedTask;
     }

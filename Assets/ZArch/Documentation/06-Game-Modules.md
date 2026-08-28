@@ -10,12 +10,10 @@ GameModules 用来管理“大厅、战斗、关卡、玩法”等可进入和�
 using ZArch;
 using ZArch.GameModules;
 
-public sealed class BattleModule : IGameModule
-{
+public sealed class BattleModule : IGameModule {
     public string Id => "battle";
 
-    public void Configure(ArchitectureScope scope, GameEnterContext context)
-    {
+    public void Configure(ArchitectureScope scope, GameEnterContext context) {
         scope.Register<BattleModel>(new BattleModel());
         scope.Register<BattleSystem>(new BattleSystem());
     }
@@ -39,12 +37,8 @@ using ZArch.GameModules.Unity;
 using ZArch.Unity;
 
 [UnityEngine.CreateAssetMenu(menuName = "Game/Battle Module")]
-public sealed class BattleModuleAsset : UnityGameModuleAsset
-{
-    public override void Configure(
-        ArchitectureScope scope,
-        GameEnterContext context)
-    {
+public sealed class BattleModuleAsset : UnityGameModuleAsset {
+    public override void Configure( ArchitectureScope scope, GameEnterContext context) {
         scope.Register<BattleModel>(new BattleModel());
         scope.Register<BattleSystem>(new BattleSystem());
     }
@@ -61,13 +55,11 @@ using ZArch.GameModules;
 using ZArch.GameModules.Unity;
 using ZArch.Unity;
 
-public sealed class GameBootstrap : ArchitectureBootstrap
-{
+public sealed class GameBootstrap : ArchitectureBootstrap {
     [UnityEngine.SerializeField]
     private GameModuleCatalog m_ModuleCatalog;
 
-    protected override void ConfigureRoot(ArchitectureScope root)
-    {
+    protected override void ConfigureRoot(ArchitectureScope root) {
         var launcher = new GameModuleLauncher(
             new GameScopeFactory(root),
             new UnityGameContentLoader(),
@@ -116,13 +108,14 @@ using UnityEngine;
 using ZArch;
 using ZArch.GameModules.Unity;
 
-public sealed class BattleModuleSceneEntry : GameModuleSceneEntry
-{
-    [SerializeField] private BattleHud m_Hud;
-    [SerializeField] private BattleWorld m_World;
+public sealed class BattleModuleSceneEntry : GameModuleSceneEntry {
+    [SerializeField] 
+    private BattleHud m_Hud;
+    
+    [SerializeField] 
+    private BattleWorld m_World;
 
-    protected override void OnBindScope(ArchitectureScope scope)
-    {
+    protected override void OnBindScope(ArchitectureScope scope) {
         m_Hud.BindScope(scope);
         m_World.Initialize(scope);
     }

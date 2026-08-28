@@ -10,10 +10,8 @@ ZArch 的 Unity 层只负责把纯 C# 架构接入 Unity 生命周期。核心�
 using ZArch;
 using ZArch.Unity;
 
-public sealed class GameBootstrap : ArchitectureBootstrap
-{
-    protected override void ConfigureRoot(ArchitectureScope scope)
-    {
+public sealed class GameBootstrap : ArchitectureBootstrap {
+    protected override void ConfigureRoot(ArchitectureScope scope) {
         scope.Register<IPlayerRepository>(new PlayerRepository());
         scope.Register<PlayerModel>(new PlayerModel());
         scope.Register<PlayerSystem>(new PlayerSystem());
@@ -28,7 +26,7 @@ public sealed class GameBootstrap : ArchitectureBootstrap
 | 成员 | 默认值 | 用途 |
 | --- | --- | --- |
 | `RootScopeName` | `App` | 根 Scope 名称 |
-| `PersistAcrossScenes` | `true` | 是否调用 `DontDestroyOnLoad` |
+| `DontDestroy` | `true` | 是否调用 `DontDestroyOnLoad` |
 | `RequiresExplicitShutdown` | `false` | 未显式关闭时是否报告错误 |
 | `CreateArchitecture()` | 新 `Architecture` | 需要自定义 Architecture 子类时覆写 |
 | `ConfigureRoot(scope)` | 必须实现 | 注册根服务 |
@@ -44,10 +42,8 @@ using UnityEngine;
 using ZArch;
 using ZArch.Unity;
 
-public sealed class PlayerPanel : ArchitectureController
-{
-    public void Initialize(ArchitectureScope scope)
-    {
+public sealed class PlayerPanel : ArchitectureController {
+    public void Initialize(ArchitectureScope scope) {
         BindScope(scope);
 
         this.RegisterArchitectureEvent<PlayerChangedEvent>(Refresh)
@@ -56,8 +52,7 @@ public sealed class PlayerPanel : ArchitectureController
         Refresh(default);
     }
 
-    private void Refresh(PlayerChangedEvent _)
-    {
+    private void Refresh(PlayerChangedEvent _) {
         var model = this.GetModel<PlayerModel>();
         // 刷新 UI
     }
@@ -67,12 +62,11 @@ public sealed class PlayerPanel : ArchitectureController
 Controller 必须在使用扩展方法前调用 `BindScope(activeScope)`。推荐由场景入口或对象工厂统一绑定：
 
 ```csharp
-public sealed class SceneEntry : MonoBehaviour
-{
-    [SerializeField] private PlayerPanel m_PlayerPanel;
+public sealed class SceneEntry : MonoBehaviour {
+    [SerializeField] 
+    private PlayerPanel m_PlayerPanel;
 
-    public void Initialize(ArchitectureScope scope)
-    {
+    public void Initialize(ArchitectureScope scope) {
         m_PlayerPanel.Initialize(scope);
     }
 }
@@ -113,17 +107,14 @@ this.RegisterArchitectureEvent<SceneStateChangedEvent>(OnSceneStateChanged)
 using ZArch;
 using ZArch.Unity;
 
-public sealed class GameBootstrap : ArchitectureBootstrap
-{
+public sealed class GameBootstrap : ArchitectureBootstrap {
     private SceneScopeManager m_SceneScopeManager;
 
-    protected override void ConfigureRoot(ArchitectureScope root)
-    {
+    protected override void ConfigureRoot(ArchitectureScope root) {
         root.Register<GameSettings>(new GameSettings());
     }
 
-    protected override void Awake()
-    {
+    protected override void Awake() {
         base.Awake();
 
         m_SceneScopeManager = new SceneScopeManager(Architecture);
@@ -138,8 +129,7 @@ public sealed class GameBootstrap : ArchitectureBootstrap
         m_SceneScopeManager.Enable();
     }
 
-    protected override void OnDestroy()
-    {
+    protected override void OnDestroy() {
         m_SceneScopeManager?.Dispose();
         base.OnDestroy();
     }
