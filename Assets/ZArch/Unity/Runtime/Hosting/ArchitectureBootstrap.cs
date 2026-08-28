@@ -8,7 +8,7 @@ namespace ZArch.Unity {
         public Architecture Architecture { get; private set; }
         public ArchitectureScope RootScope { get; private set; }
 
-        protected virtual bool PersistAcrossScenes => true;
+        protected virtual bool DontDestroy => true;
         protected virtual bool RequiresExplicitShutdown => false;
         protected virtual string RootScopeName => "App";
 
@@ -16,7 +16,7 @@ namespace ZArch.Unity {
         protected abstract void ConfigureRoot(ArchitectureScope scope);
 
         protected virtual void Awake() {
-            if (PersistAcrossScenes) {
+            if (DontDestroy) {
                 DontDestroyOnLoad(gameObject);
             }
 

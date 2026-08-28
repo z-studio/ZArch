@@ -13,7 +13,7 @@ namespace ZArch.Unity {
         public ArchitectureScope RootScope { get; private set; }
         public Task Initialization { get; private set; } = Task.CompletedTask;
 
-        protected virtual bool PersistAcrossScenes => true;
+        protected virtual bool DontDestroy => true;
         protected virtual bool RequiresExplicitShutdown => true;
         protected virtual string RootScopeName => "App";
 
@@ -25,7 +25,7 @@ namespace ZArch.Unity {
         );
 
         protected virtual void Awake() {
-            if (PersistAcrossScenes) {
+            if (DontDestroy) {
                 DontDestroyOnLoad(gameObject);
             }
 
