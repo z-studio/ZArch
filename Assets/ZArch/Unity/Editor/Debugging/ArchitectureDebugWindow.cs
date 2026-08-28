@@ -2,15 +2,15 @@ using UnityEditor;
 using UnityEngine;
 
 namespace ZArch.Unity.Editor {
-    public sealed class ArchDebugWindow : EditorWindow {
+    public sealed class ArchitectureDebugWindow : EditorWindow {
         private Vector2 m_Scroll;
-        private ArchDebugInfo m_Info;
-        private ArchitectureBootstrap[] m_Bootstraps = System.Array.Empty<ArchitectureBootstrap>();
+        private ArchitectureDebugInfo m_Info;
+        private MonoBehaviour[] m_Bootstraps = System.Array.Empty<MonoBehaviour>();
         private int m_SelectedBootstrap;
         private double m_NextRefresh;
 
-        [MenuItem("Tools/ZArch/Arch Debug")]
-        public static void Open() => GetWindow<ArchDebugWindow>("Arch Debug");
+        [MenuItem("Tools/ZArch/Architecture Debug")]
+        public static void Open() => GetWindow<ArchitectureDebugWindow>("Architecture Debug");
 
         private void OnEnable() => EditorApplication.update += OnEditorUpdate;
 
@@ -85,10 +85,17 @@ namespace ZArch.Unity.Editor {
         }
 
         private void Refresh() {
-            m_Bootstraps = Object.FindObjectsByType<ArchitectureBootstrap>(
+            var synchronous = Object.FindObjectsByType<ArchitectureBootstrap>(
                 FindObjectsInactive.Include,
                 FindObjectsSortMode.None
             );
+            var asynchronous = Object.FindObjectsByType<AsyncArchitectureBootstrap>(
+                FindObjectsInactive.Include,
+                FindObjectsSortMode.None
+            );
+            m_Bootstraps = new MonoBehaviour[synchronous.Length + asynchronous.Length];
+            synchronous.CopyTo(m_Bootstraps, 0);
+            asynchronous.CopyTo(m_Bootstraps, synchronous.Length);
 
             if (m_SelectedBootstrap >= m_Bootstraps.Length) {
                 m_SelectedBootstrap = 0;
@@ -97,12 +104,17 @@ namespace ZArch.Unity.Editor {
             m_Info = CaptureSelected();
         }
 
-        private ArchDebugInfo CaptureSelected() {
+        private ArchitectureDebugInfo CaptureSelected() {
             if (m_Bootstraps.Length == 0) {
-                return new ArchDebugInfo();
+                return new ArchitectureDebugInfo();
             }
 
-            return ArchDebug.Capture(m_Bootstraps[m_SelectedBootstrap].Architecture);
+            var architecture = m_Bootstraps[m_SelectedBootstrap] switch {
+                ArchitectureBootstrap synchronous => synchronous.Architecture,
+                AsyncArchitectureBootstrap asynchronous => asynchronous.Architecture,
+                _ => null
+            };
+            return ArchitectureDebug.Capture(architecture);
         }
 
         private static void DrawScope(ScopeDebugInfo scope, int depth) {

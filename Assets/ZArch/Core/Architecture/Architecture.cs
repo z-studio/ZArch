@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Threading.Tasks;
 
 namespace ZArch {
     public partial class Architecture : IDisposable {
@@ -13,9 +14,10 @@ namespace ZArch {
         private bool m_IsShuttingDown;
         private bool m_HasStartedLifecycle;
         private bool m_IsTerminated;
+        private Task m_ShutdownTask;
 
         public bool IsStarted { get; private set; }
-        public Action<Exception> ExceptionHandler { get; set; }
+        public Action<Exception> UnhandledExceptionHandler { get; set; }
         public IReadOnlyList<ArchitectureScope> RootScopes => m_RootScopesView;
         public IReadOnlyList<ArchitectureScope> Scopes => m_AllScopesView;
         public event Action<ArchitectureScope> ScopeConfiguring;

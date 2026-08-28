@@ -20,15 +20,15 @@ namespace ZArch.Unity {
         public ScopeDebugInfo[] Children = Array.Empty<ScopeDebugInfo>();
     }
 
-    public sealed class ArchDebugInfo {
+    public sealed class ArchitectureDebugInfo {
         public bool IsStarted;
         public string ArchitectureType;
         public ScopeDebugInfo[] Roots = Array.Empty<ScopeDebugInfo>();
     }
 
-    public static class ArchDebug {
-        public static ArchDebugInfo Capture(Architecture architecture) {
-            var info = new ArchDebugInfo { IsStarted = architecture != null && architecture.IsStarted };
+    public static class ArchitectureDebug {
+        public static ArchitectureDebugInfo Capture(Architecture architecture) {
+            var info = new ArchitectureDebugInfo { IsStarted = architecture != null && architecture.IsStarted };
 
             if (!info.IsStarted) {
                 return info;

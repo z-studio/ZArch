@@ -66,9 +66,6 @@ public sealed class GameBootstrap : ArchitectureBootstrap
     [UnityEngine.SerializeField]
     private GameModuleCatalog m_ModuleCatalog;
 
-    protected override Architecture CreateArchitecture()
-        => new Architecture();
-
     protected override void ConfigureRoot(ArchitectureScope root)
     {
         var launcher = new GameModuleLauncher(
@@ -142,7 +139,7 @@ public sealed class BattleModuleSceneEntry : GameModuleSceneEntry
 await launcher.ShutdownAsync();
 ```
 
-`ShutdownAsync` 会结束当前模块并阻止后续进入。Unity 项目若要求完整等待场景卸载，应配合 Bootstrap 的 `RequiresExplicitShutdown`，先等待 Launcher，再关闭 Architecture。
+`ShutdownAsync` 会结束当前模块并阻止后续进入。Launcher 实现了 `IAsyncDeinitializable`；使用 `Architecture.ShutdownAsync()` 时框架会等待它完成。Unity 项目仍应在销毁 Bootstrap 前显式等待整个关闭流程。
 
 ## 7. 何时使用 GameModules
 
@@ -153,6 +150,6 @@ await launcher.ShutdownAsync();
 - 需要可验证的进入失败回滚；
 - 计划替换场景加载后端。
 
-简单项目只有一个永久场景时，直接使用根 Scope 或 `SceneScopeBinder` 即可，不必引入模块层。
+简单项目只有一个永久场景时，直接使用根 Scope 或 `SceneScopeManager` 即可，不必引入模块层。
 
 下一篇：[API 速查](07-API-Reference.md)

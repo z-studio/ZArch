@@ -107,9 +107,9 @@ ArchitectureScope.Debug.cs
 
 - Architecture 启动、关闭以及禁止重启；
 - 根/子 Scope 创建、父级解析和覆盖；
-- Scoped、Transient、Alias 与循环 Factory；
-- 初始化顺序、逆序释放与失败回滚；
-- 异步成功、取消、超时以及关闭竞态；
+- Scoped Factory、无所有权 Transient、Owned Transient、Alias 与循环 Factory；
+- 初始化顺序、同步/异步逆序释放、清理异常聚合与失败回滚；
+- 异步成功、取消、超时以及初始化/关闭竞态；
 - Architecture Event、Scope Event 和订阅异常；
 - BindableProperty 比较、立即回调和注销；
 - Scene Scope 的创建与卸载；
@@ -125,5 +125,11 @@ ArchitectureScope.Debug.cs
 - 新增文档时同时添加 Unity `.meta`；
 - 修改 API 后全文搜索旧名称，并逐个检查 Markdown 相对链接；
 - 明确标出可选层，避免让读者误以为必须使用所有功能。
+
+## 8. 公开 API 边界
+
+业务代码可以直接依赖 `Architecture`、`ArchitectureScope`、生命周期接口、Patterns 和 Unity 扩展。事件注册表、事件调度器、调试快照生成细节以及 Unity 注销触发组件保持 `internal`。
+
+跨程序集确实需要访问的内部调试数据通过定向 `InternalsVisibleTo` 开放，不要为了省事把整个实现类型改成 `public`。
 
 返回：[项目 README](../README.md)

@@ -4,7 +4,7 @@ using UnityEngine;
 using UnityEngine.SceneManagement;
 
 namespace ZArch.Unity {
-    public abstract class UnregisterTrigger : MonoBehaviour {
+    internal abstract class UnregisterTrigger : MonoBehaviour {
         private sealed class TrackedUnregister : IUnregister {
             private UnregisterTrigger m_Owner;
             private IUnregister m_Unregister;
@@ -57,15 +57,15 @@ namespace ZArch.Unity {
         }
     }
 
-    public sealed class UnregisterOnDestroyTrigger : UnregisterTrigger {
+    internal sealed class UnregisterOnDestroyTrigger : UnregisterTrigger {
         private void OnDestroy() => Unregister();
     }
 
-    public sealed class UnregisterOnDisableTrigger : UnregisterTrigger {
+    internal sealed class UnregisterOnDisableTrigger : UnregisterTrigger {
         private void OnDisable() => Unregister();
     }
 
-    public sealed class UnregisterCurrentSceneUnloadedTrigger : MonoBehaviour {
+    internal sealed class UnregisterCurrentSceneUnloadedTrigger : MonoBehaviour {
         private sealed class SceneUnregister : IUnregister {
             private UnregisterCurrentSceneUnloadedTrigger m_Owner;
             private IUnregister m_Unregister;
@@ -190,7 +190,7 @@ namespace ZArch.Unity {
         }
     }
 
-    public static class UnityUnregisterExtension {
+    public static class UnityUnregisterExtensions {
         private static T GetOrAddComponent<T>(GameObject gameObject) where T : Component {
             if (!gameObject) {
                 throw new ArgumentNullException(nameof(gameObject));

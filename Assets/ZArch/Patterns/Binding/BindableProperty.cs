@@ -2,14 +2,14 @@ using System;
 
 namespace ZArch {
     public class BindableProperty<T> : IBindableProperty<T> {
-        protected T mValue;
+        protected T m_Value;
         private readonly EasyEvent<T> m_OnValueChanged = new();
         private Func<T, T, bool> m_Comparer;
 
         public static Func<T, T, bool> Comparer { get; set; } = (a, b) => a == null ? b == null : a.Equals(b);
 
         public BindableProperty(T defaultValue = default) {
-            mValue = defaultValue;
+            m_Value = defaultValue;
             m_Comparer = Comparer;
         }
 
@@ -36,15 +36,15 @@ namespace ZArch {
             }
         }
 
-        protected virtual void SetValue(T newValue) => mValue = newValue;
-        protected virtual T GetValue() => mValue;
+        protected virtual void SetValue(T newValue) => m_Value = newValue;
+        protected virtual T GetValue() => m_Value;
 
-        public void SetValueWithoutEvent(T newValue) => SetValue(newValue);
+        public void SetValueWithoutNotify(T newValue) => SetValue(newValue);
 
         public IUnregister Register(Action<T> onValueChanged) =>
             m_OnValueChanged.Register(onValueChanged ?? throw new ArgumentNullException(nameof(onValueChanged)));
 
-        public IUnregister RegisterWithInitValue(Action<T> onValueChanged) {
+        public IUnregister RegisterAndInvoke(Action<T> onValueChanged) {
             if (onValueChanged == null) {
                 throw new ArgumentNullException(nameof(onValueChanged));
             }

@@ -13,4 +13,8 @@ namespace ZArch {
     public interface IDeinitializable {
         void Deinitialize();
     }
+
+    public interface IAsyncDeinitializable {
+        Task DeinitializeAsync(CancellationToken cancellationToken);
+    }
 }

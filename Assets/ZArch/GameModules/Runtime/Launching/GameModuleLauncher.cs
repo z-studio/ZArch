@@ -5,7 +5,10 @@ using System.Threading;
 using System.Threading.Tasks;
 
 namespace ZArch.GameModules {
-    public sealed class GameModuleLauncher : IGameModuleLauncher, IDeinitializable {
+    public sealed class GameModuleLauncher :
+        IGameModuleLauncher,
+        IAsyncDeinitializable,
+        IDeinitializable {
         private readonly IGameScopeFactory m_ScopeFactory;
         private readonly IGameContentLoader m_ContentLoader;
         private readonly Dictionary<string, IGameModule> m_Modules = new(StringComparer.Ordinal);
@@ -154,6 +157,8 @@ namespace ZArch.GameModules {
             return m_ShutdownTask;
         }
 
+        public Task DeinitializeAsync(CancellationToken cancellationToken) => ShutdownAsync();
+
         private async Task ShutdownCoreAsync() {
             if (m_IsDisposed) {
                 return;
@@ -242,17 +247,19 @@ namespace ZArch.GameModules {
                 return;
             }
 
+            if (Current != null || IsTransitioning) {
+                throw new InvalidOperationException(
+                    "GameModuleLauncher has active asynchronous content. "
+                    + "Await ShutdownAsync or Architecture.ShutdownAsync before synchronous disposal."
+                );
+            }
+
             m_IsShuttingDown = true;
             m_IsDisposed = true;
             IsTransitioning = false;
             m_LifetimeCts.Cancel();
             m_LifetimeCts.Dispose();
 
-            if (Current != null) {
-                Current.Scope.Dispose();
-                Current.IsCleanedUp = true;
-                Current = null;
-            }
         }
     }
 }

@@ -7,7 +7,7 @@ namespace ZArch {
     public interface ICanSendCommand : IBelongToScope { }
     public interface ICanSendQuery : IBelongToScope { }
 
-    public static class ArchitectureRuleExtension {
+    public static class ArchitectureCapabilityExtensions {
         public static T GetModel<T>(this ICanGetModel self) where T : class, IModel => self.GetScope().Resolve<T>();
 
         public static T GetSystem<T>(this ICanGetSystem self) where T : class, ISystem => self.GetScope().Resolve<T>();

@@ -15,7 +15,7 @@ namespace ZArch.Unity {
         public override string ToString() => ScenePath;
     }
 
-    public sealed class SceneScopeBinder : IDisposable {
+    public sealed class SceneScopeManager : IDisposable {
         private sealed class Binding {
             public Action<ArchitectureScope> Setup;
             public Func<Scene, ArchitectureScope> ParentSelector;
@@ -28,7 +28,7 @@ namespace ZArch.Unity {
 
         public bool IsEnabled { get; private set; }
 
-        public SceneScopeBinder(Architecture architecture) {
+        public SceneScopeManager(Architecture architecture) {
             m_Architecture = architecture ?? throw new ArgumentNullException(nameof(architecture));
         }
 
@@ -148,7 +148,7 @@ namespace ZArch.Unity {
 
                 m_SceneScopes.Add(scene.handle, scope);
             } catch (Exception exception) {
-                m_Architecture.ReportException(exception);
+                m_Architecture.ReportUnhandledException(exception);
             }
         }
 
@@ -180,7 +180,7 @@ namespace ZArch.Unity {
 
         private void EnsureNotDisposed() {
             if (m_IsDisposed) {
-                throw new ObjectDisposedException(nameof(SceneScopeBinder));
+                throw new ObjectDisposedException(nameof(SceneScopeManager));
             }
         }
     }

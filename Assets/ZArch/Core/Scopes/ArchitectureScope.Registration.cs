@@ -22,12 +22,11 @@ namespace ZArch {
         public void Register<TService, TImplementation>(bool owned = true, int initializationOrder = 0)
             where TService : class
             where TImplementation : class, TService, new() {
-            RegisterFactory<TService>(_ => new TImplementation(), EServiceLifetime.Scoped, owned, initializationOrder);
+            RegisterScopedFactory<TService>(_ => new TImplementation(), owned, initializationOrder);
         }
 
-        public void RegisterFactory<TService>(
+        public void RegisterScopedFactory<TService>(
             Func<IServiceResolver, TService> factory,
-            EServiceLifetime lifetime = EServiceLifetime.Scoped,
             bool owned = true,
             int initializationOrder = 0
         ) where TService : class {
@@ -35,7 +34,49 @@ namespace ZArch {
                 throw new ArgumentNullException(nameof(factory));
             }
 
-            RegisterDescriptor(typeof(TService), factory, lifetime, owned, initializationOrder, null, true);
+            RegisterDescriptor(
+                typeof(TService),
+                factory,
+                EServiceLifetime.Scoped,
+                owned,
+                initializationOrder,
+                null,
+                true
+            );
+        }
+
+        public void RegisterTransient<TService>(Func<IServiceResolver, TService> factory)
+            where TService : class {
+            if (factory == null) {
+                throw new ArgumentNullException(nameof(factory));
+            }
+
+            RegisterDescriptor(
+                typeof(TService),
+                factory,
+                EServiceLifetime.Transient,
+                false,
+                0,
+                null,
+                true
+            );
+        }
+
+        public void RegisterOwnedTransient<TService>(Func<IServiceResolver, TService> factory)
+            where TService : class {
+            if (factory == null) {
+                throw new ArgumentNullException(nameof(factory));
+            }
+
+            RegisterDescriptor(
+                typeof(TService),
+                factory,
+                EServiceLifetime.Transient,
+                true,
+                0,
+                null,
+                true
+            );
         }
 
         public void RegisterAlias<TAlias, TService>()

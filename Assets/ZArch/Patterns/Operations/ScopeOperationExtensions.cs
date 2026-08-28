@@ -1,7 +1,7 @@
 using System;
 
 namespace ZArch {
-    public static class ScopeOperationExtension {
+    public static class ScopeOperationExtensions {
         public static void SendCommand<T>(this ArchitectureScope scope, T command) where T : ICommand {
             if (scope == null) {
                 throw new ArgumentNullException(nameof(scope));

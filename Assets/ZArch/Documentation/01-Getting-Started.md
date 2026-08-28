@@ -59,8 +59,6 @@ using ZArch;
 using ZArch.Unity;
 
 public sealed class GameBootstrap : ArchitectureBootstrap {
-    protected override Architecture CreateArchitecture() => new Architecture();
-
     protected override void ConfigureRoot(ArchitectureScope scope) {
         scope.Register<ICounterModel>(new CounterModel());
     }
@@ -96,7 +94,7 @@ public sealed class CounterController : ArchitectureController {
         m_Button.onClick.AddListener(OnClicked);
         this.GetModel<ICounterModel>()
             .Count
-            .RegisterWithInitValue(UpdateText)
+            .RegisterAndInvoke(UpdateText)
             .UnregisterWhenGameObjectDestroyed(gameObject);
     }
 

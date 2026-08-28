@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Threading;
+using System.Threading.Tasks;
 
 namespace ZArch {
     public sealed partial class ArchitectureScope : IServiceResolver, IDisposable {
@@ -16,6 +17,7 @@ namespace ZArch {
         private readonly TypeEventSystem m_Events = new();
         private readonly HashSet<TrackedEventUnregister> m_EventUnregisters = new();
         private readonly CancellationTokenSource m_LifetimeCts = new();
+        private Task m_DisposeTask;
         private int m_NextRegistrationOrder;
 
         public string Name { get; }
@@ -24,7 +26,7 @@ namespace ZArch {
         public Architecture Architecture { get; }
         public EScopeState State { get; private set; } = EScopeState.Created;
         public bool IsDisposed => State == EScopeState.Disposed;
-        public bool IsActivated => State == EScopeState.Active;
+        public bool IsActive => State == EScopeState.Active;
         public bool IsActivating => State is EScopeState.Configuring or EScopeState.Initializing;
 
         public IReadOnlyList<ArchitectureScope> Children => m_ChildrenView;

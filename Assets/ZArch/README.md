@@ -68,8 +68,6 @@ using ZArch;
 using ZArch.Unity;
 
 public sealed class GameBootstrap : ArchitectureBootstrap {
-    protected override Architecture CreateArchitecture() => new Architecture();
-
     protected override void ConfigureRoot(ArchitectureScope scope) {
         scope.Register<ICounterModel>(new CounterModel());
     }
@@ -97,7 +95,7 @@ public sealed class CounterController : ArchitectureController {
 
         this.GetModel<ICounterModel>()
             .Count
-            .RegisterWithInitValue(count => m_Text.text = count.ToString())
+            .RegisterAndInvoke(count => m_Text.text = count.ToString())
             .UnregisterWhenGameObjectDestroyed(gameObject);
     }
 
@@ -129,7 +127,7 @@ architecture.Start();
 
 var app = architecture.CreateRootScope("App", scope => {
     scope.Register<IClock>(new SystemClock());
-    scope.RegisterFactory<IRepository>(resolver =>
+    scope.RegisterScopedFactory<IRepository>(resolver =>
         new Repository(resolver.Resolve<IClock>()));
 });
 
@@ -205,6 +203,8 @@ Core 和 Patterns 均启用 `noEngineReferences`。
 - Scope 激活后注册表被冻结，运行时变化通过创建或销毁子 Scope 表达。
 - 创建 Scope 的一方必须明确负责其释放；父 Scope 会自动释放所有子 Scope。
 - 同步 Scope 不能包含 `IAsyncInitializable` 服务。
+- 包含 `IAsyncDeinitializable` 的 Scope 应使用 `DisposeAsync()` 或 `Architecture.ShutdownAsync()`。
+- Transient 默认不归 Scope 所有；需要统一释放时必须显式使用 `RegisterOwnedTransient`。
 - 注册事件后必须保存 `IUnregister`，或使用 Unity 自动注销扩展。
 - ZArch 不提供内部锁，也不承诺并发线程安全；后台任务完成后应先回到所属同步上下文。
 

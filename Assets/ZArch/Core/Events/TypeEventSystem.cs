@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 
 namespace ZArch {
-    public class EasyEvents {
+    internal sealed class EasyEvents {
         private readonly Dictionary<Type, IEasyEvent> m_TypeEvents = new();
 
         public void AddEvent<T>() where T : IEasyEvent, new() => m_TypeEvents.Add(typeof(T), new T());
@@ -26,7 +26,7 @@ namespace ZArch {
         public void Clear() => m_TypeEvents.Clear();
     }
 
-    public class TypeEventSystem {
+    internal sealed class TypeEventSystem {
         private readonly EasyEvents m_Events = new();
 
         public void Send<T>() where T : new() => m_Events.GetEvent<EasyEvent<T>>()?.Trigger(new T());

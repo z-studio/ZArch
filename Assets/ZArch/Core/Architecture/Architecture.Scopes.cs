@@ -110,8 +110,17 @@ namespace ZArch {
                 ScopeConfiguring?.Invoke(scope);
                 scope.Activate();
                 AttachActivatedScope(scope);
-            } catch {
-                scope.Dispose();
+            } catch (Exception activationException) {
+                try {
+                    scope.Dispose();
+                } catch (Exception cleanupException) {
+                    throw new AggregateException(
+                        $"Activating scope '{scope.Name}' failed, and rolling it back also failed.",
+                        activationException,
+                        cleanupException
+                    );
+                }
+
                 throw;
             }
         }
@@ -166,8 +175,17 @@ namespace ZArch {
                 linkedCts.Token.ThrowIfCancellationRequested();
                 AttachActivatedScope(scope);
                 return scope;
-            } catch {
-                scope.Dispose();
+            } catch (Exception activationException) {
+                try {
+                    await scope.DisposeAsync(CancellationToken.None).ConfigureAwait(true);
+                } catch (Exception cleanupException) {
+                    throw new AggregateException(
+                        $"Activating scope '{scope.Name}' failed, and rolling it back also failed.",
+                        activationException,
+                        cleanupException
+                    );
+                }
+
                 throw;
             } finally {
                 linkedCts?.Dispose();

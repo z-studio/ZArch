@@ -64,12 +64,51 @@ namespace ZArch.Tests.Editor {
         public void CircularFactoryDependency_IsRejectedAndRolledBack() {
             Assert.Throws<InvalidOperationException>(() =>
                 m_Architecture.CreateRootScope("Circular", scope => {
-                    scope.RegisterFactory<ServiceA>(resolver => new ServiceA(resolver.Resolve<ServiceB>()));
-                    scope.RegisterFactory<ServiceB>(resolver => new ServiceB(resolver.Resolve<ServiceA>()));
+                    scope.RegisterScopedFactory<ServiceA>(resolver => new ServiceA(resolver.Resolve<ServiceB>()));
+                    scope.RegisterScopedFactory<ServiceB>(resolver => new ServiceB(resolver.Resolve<ServiceA>()));
                 })
             );
 
             Assert.That(m_Architecture.RootScopes, Is.Empty);
+        }
+
+        [Test]
+        public void TransientFactory_DoesNotOwnCreatedInstancesByDefault() {
+            var created = new System.Collections.Generic.List<DisposableService>();
+            var scope = m_Architecture.CreateRootScope("Transient", configured =>
+                configured.RegisterTransient<DisposableService>(_ => {
+                    var service = new DisposableService();
+                    created.Add(service);
+                    return service;
+                })
+            );
+
+            var first = scope.Resolve<DisposableService>();
+            var second = scope.Resolve<DisposableService>();
+            scope.Dispose();
+
+            Assert.That(first, Is.Not.SameAs(second));
+            Assert.That(created, Has.Count.EqualTo(2));
+            Assert.That(created, Has.All.Matches<DisposableService>(service => !service.IsDisposed));
+        }
+
+        [Test]
+        public void OwnedTransientFactory_DisposesEveryCreatedInstance() {
+            var created = new System.Collections.Generic.List<DisposableService>();
+            var scope = m_Architecture.CreateRootScope("OwnedTransient", configured =>
+                configured.RegisterOwnedTransient<DisposableService>(_ => {
+                    var service = new DisposableService();
+                    created.Add(service);
+                    return service;
+                })
+            );
+
+            scope.Resolve<DisposableService>();
+            scope.Resolve<DisposableService>();
+            scope.Dispose();
+
+            Assert.That(created, Has.Count.EqualTo(2));
+            Assert.That(created, Has.All.Matches<DisposableService>(service => service.IsDisposed));
         }
 
         [Test]
@@ -102,7 +141,7 @@ namespace ZArch.Tests.Editor {
         }
 
         [Test]
-        public void MultipleHosts_DoNotShareServicesScopesOrEvents() {
+        public void MultipleArchitectures_DoNotShareServicesScopesOrEvents() {
             using var secondArchitecture = new Architecture();
             secondArchitecture.Start();
 
@@ -281,10 +320,10 @@ namespace ZArch.Tests.Editor {
         }
 
         [Test]
-        public void ThrowingExceptionHandler_DoesNotInterruptScopeCleanup() {
+        public void ThrowingUnhandledExceptionHandler_DoesNotInterruptScopeCleanup() {
             var cleanupCount = 0;
             var cleaned = new CallbackService(() => cleanupCount++);
-            m_Architecture.ExceptionHandler = _ => throw new InvalidOperationException("Reporter failed.");
+            m_Architecture.UnhandledExceptionHandler = _ => throw new InvalidOperationException("Reporter failed.");
 
             var scope = m_Architecture.CreateRootScope("Root", configured => {
                 configured.Register(cleaned);
@@ -295,6 +334,52 @@ namespace ZArch.Tests.Editor {
 
             Assert.DoesNotThrow(scope.Dispose);
             Assert.That(cleanupCount, Is.EqualTo(1));
+            Assert.That(scope.IsDisposed, Is.True);
+        }
+
+        [Test]
+        public void CleanupFailure_ThrowsAfterRemainingServicesAreCleaned() {
+            var cleanupCount = 0;
+            var scope = m_Architecture.CreateRootScope("Root", configured => {
+                configured.Register(new CallbackService(() => cleanupCount++));
+                configured.Register<IDeinitializable>(
+                    new CallbackService(() => throw new InvalidOperationException("Cleanup failed."))
+                );
+            });
+
+            var exception = Assert.Throws<InvalidOperationException>(scope.Dispose);
+
+            Assert.That(exception.Message, Is.EqualTo("Cleanup failed."));
+            Assert.That(cleanupCount, Is.EqualTo(1));
+            Assert.That(scope.IsDisposed, Is.True);
+        }
+
+        [Test]
+        public async Task ShutdownAsync_AwaitsAsyncDeinitialization() {
+            var service = new BlockingAsyncDeinitializableService();
+            m_Architecture.CreateRootScope("AsyncCleanup", scope => scope.Register(service));
+
+            var shutdown = m_Architecture.ShutdownAsync();
+            await service.Started.Task;
+
+            Assert.That(shutdown.IsCompleted, Is.False);
+            service.Release.SetResult(true);
+            await shutdown;
+
+            Assert.That(service.IsDeinitialized, Is.True);
+            Assert.That(m_Architecture.RootScopes, Is.Empty);
+        }
+
+        [Test]
+        public void SynchronousDispose_RejectsAsyncOnlyDeinitialization() {
+            var scope = m_Architecture.CreateRootScope(
+                "AsyncCleanup",
+                configured => configured.Register(new AsyncOnlyDeinitializableService())
+            );
+
+            var exception = Assert.Throws<InvalidOperationException>(scope.Dispose);
+
+            Assert.That(exception.Message, Does.Contain("DisposeAsync"));
             Assert.That(scope.IsDisposed, Is.True);
         }
 
@@ -471,6 +556,22 @@ namespace ZArch.Tests.Editor {
             }
         }
 
+        private sealed class AsyncOnlyDeinitializableService : IAsyncDeinitializable {
+            public Task DeinitializeAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+        }
+
+        private sealed class BlockingAsyncDeinitializableService : IAsyncDeinitializable {
+            public TaskCompletionSource<bool> Started { get; } = new();
+            public TaskCompletionSource<bool> Release { get; } = new();
+            public bool IsDeinitialized { get; private set; }
+
+            public async Task DeinitializeAsync(CancellationToken cancellationToken) {
+                Started.TrySetResult(true);
+                await Release.Task;
+                IsDeinitialized = true;
+            }
+        }
+
         private sealed class BlockingAsyncService : IAsyncInitializable {
             public TaskCompletionSource<bool> Started { get; } = new();
             public TaskCompletionSource<bool> Release { get; } = new();
@@ -496,6 +597,11 @@ namespace ZArch.Tests.Editor {
         private sealed class PlainService {
             public string Value { get; }
             public PlainService(string value) => Value = value;
+        }
+
+        private sealed class DisposableService : IDisposable {
+            public bool IsDisposed { get; private set; }
+            public void Dispose() => IsDisposed = true;
         }
 
         private readonly struct ProbeEvent { }

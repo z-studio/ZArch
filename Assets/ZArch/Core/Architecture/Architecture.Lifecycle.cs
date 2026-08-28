@@ -1,4 +1,8 @@
 using System;
+using System.Collections.Generic;
+using System.Runtime.ExceptionServices;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace ZArch {
     public partial class Architecture {
@@ -29,15 +33,15 @@ namespace ZArch {
             }
         }
 
-        public void ReportException(Exception exception) {
+        public void ReportUnhandledException(Exception exception) {
             if (exception == null) {
                 throw new ArgumentNullException(nameof(exception));
             }
 
-            var handlers = ExceptionHandler;
+            var handlers = UnhandledExceptionHandler;
 
             if (handlers == null) {
-                return;
+                ExceptionDispatchInfo.Capture(exception).Throw();
             }
 
             foreach (Action<Exception> handler in handlers.GetInvocationList()) {
@@ -60,6 +64,7 @@ namespace ZArch {
                 return;
             }
 
+            var cleanupExceptions = new List<Exception>();
             m_IsShuttingDown = true;
             IsStarted = false;
             var callOnShutdown = m_HasStartedLifecycle;
@@ -69,20 +74,28 @@ namespace ZArch {
                 var roots = m_RootScopes.ToArray();
 
                 for (var i = roots.Length - 1; i >= 0; i--) {
-                    roots[i]?.Dispose();
+                    try {
+                        roots[i]?.Dispose();
+                    } catch (Exception exception) {
+                        cleanupExceptions.Add(exception);
+                    }
                 }
 
                 var pending = m_PendingScopes.ToArray();
 
                 for (var i = pending.Length - 1; i >= 0; i--) {
-                    pending[i]?.Dispose();
+                    try {
+                        pending[i]?.Dispose();
+                    } catch (Exception exception) {
+                        cleanupExceptions.Add(exception);
+                    }
                 }
 
                 if (callOnShutdown) {
                     try {
                         OnShutdown();
                     } catch (Exception exception) {
-                        ReportException(exception);
+                        cleanupExceptions.Add(exception);
                     }
                 }
             } finally {
@@ -94,6 +107,89 @@ namespace ZArch {
                 m_IsShuttingDown = false;
                 m_IsTerminated = true;
             }
+
+            ReportCleanupExceptions(cleanupExceptions);
+        }
+
+        public Task ShutdownAsync(CancellationToken cancellationToken = default) {
+            if (m_ShutdownTask != null) {
+                return m_ShutdownTask;
+            }
+
+            if (m_IsTerminated) {
+                return Task.CompletedTask;
+            }
+
+            m_ShutdownTask = ShutdownCoreAsync(cancellationToken);
+            return m_ShutdownTask;
+        }
+
+        private async Task ShutdownCoreAsync(CancellationToken cancellationToken) {
+            if (m_IsShuttingDown || m_IsTerminated) {
+                return;
+            }
+
+            var cleanupExceptions = new List<Exception>();
+            m_IsShuttingDown = true;
+            IsStarted = false;
+            var callOnShutdown = m_HasStartedLifecycle;
+            m_HasStartedLifecycle = false;
+
+            try {
+                var roots = m_RootScopes.ToArray();
+
+                for (var i = roots.Length - 1; i >= 0; i--) {
+                    try {
+                        if (roots[i] != null) {
+                            await roots[i].DisposeAsync(cancellationToken).ConfigureAwait(true);
+                        }
+                    } catch (Exception exception) {
+                        cleanupExceptions.Add(exception);
+                    }
+                }
+
+                var pending = m_PendingScopes.ToArray();
+
+                for (var i = pending.Length - 1; i >= 0; i--) {
+                    try {
+                        if (pending[i] != null) {
+                            await pending[i].DisposeAsync(cancellationToken).ConfigureAwait(true);
+                        }
+                    } catch (Exception exception) {
+                        cleanupExceptions.Add(exception);
+                    }
+                }
+
+                if (callOnShutdown) {
+                    try {
+                        OnShutdown();
+                    } catch (Exception exception) {
+                        cleanupExceptions.Add(exception);
+                    }
+                }
+            } finally {
+                m_RootScopes.Clear();
+                m_AllScopes.Clear();
+                m_PendingScopes.Clear();
+                m_EventSystem.Clear();
+                ScopeConfiguring = null;
+                m_IsShuttingDown = false;
+                m_IsTerminated = true;
+            }
+
+            ReportCleanupExceptions(cleanupExceptions);
+        }
+
+        private void ReportCleanupExceptions(List<Exception> cleanupExceptions) {
+            if (cleanupExceptions.Count == 0) {
+                return;
+            }
+
+            ReportUnhandledException(
+                cleanupExceptions.Count == 1
+                    ? cleanupExceptions[0]
+                    : new AggregateException("Architecture cleanup failed.", cleanupExceptions)
+            );
         }
 
         public void Dispose() => Shutdown();

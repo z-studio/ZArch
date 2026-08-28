@@ -2,7 +2,7 @@ using System.Collections.Generic;
 
 namespace ZArch {
     public sealed partial class ArchitectureScope {
-        public IReadOnlyList<ServiceDebugInfo> GetServiceDebugInfo() {
+        internal IReadOnlyList<ServiceDebugInfo> GetServiceDebugInfo() {
             var result = new List<ServiceDebugInfo>(m_RegistrationOrder.Count);
 
             foreach (var registration in m_RegistrationOrder) {

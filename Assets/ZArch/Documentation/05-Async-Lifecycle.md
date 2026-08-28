@@ -9,7 +9,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using ZArch;
 
-public sealed class OnlineService : IAsyncInitializable, IDeinitializable
+public sealed class OnlineService : IAsyncInitializable, IAsyncDeinitializable
 {
     private bool m_Connected;
 
@@ -19,17 +19,18 @@ public sealed class OnlineService : IAsyncInitializable, IDeinitializable
         m_Connected = true;
     }
 
-    public void Deinitialize()
+    public async Task DeinitializeAsync(CancellationToken cancellationToken)
     {
         if (!m_Connected) return;
-        Disconnect();
+        await DisconnectAsync(cancellationToken);
         m_Connected = false;
     }
 
     private Task ConnectAsync(CancellationToken cancellationToken)
         => Task.Delay(100, cancellationToken); // 替换为真实 SDK 初始化
 
-    private void Disconnect() { }
+    private Task DisconnectAsync(CancellationToken cancellationToken)
+        => Task.CompletedTask;
 }
 ```
 
@@ -82,7 +83,7 @@ scope.Register(new OnlineService(), initializationOrder: 0);
 scope.Register(new PlayerSession(), initializationOrder: 100);
 ```
 
-数值较小的服务先初始化；关闭 Scope 时按相反顺序执行 `Deinitialize`。相同顺序按注册次序处理。
+数值较小的服务先初始化；关闭 Scope 时按相反顺序执行 `Deinitialize` 或 `DeinitializeAsync`。相同顺序按注册次序处理。
 
 不要在配置委托执行期间调用 `Resolve`，因为 Scope 还没有完成激活。服务之间有明确依赖时，在构造或配置阶段保存依赖，或通过 Factory 延迟构建。
 
@@ -100,40 +101,56 @@ scope.Register(new PlayerSession(), initializationOrder: 100);
 - 尊重传入的 `CancellationToken`；
 - 在成功完成前不要向外发布“可用”状态；
 - `InitializeAsync` 失败前自行清理尚未完成初始化的临时资源；
-- 成功后的 `Deinitialize` 保持幂等；
+- 成功后的反初始化保持幂等；
 - 不在后台遗留无法取消的任务。
 
 ## 5. Unity 主线程上下文
 
 服务若在等待后访问 Unity API，应确保所使用的异步库会回到 Unity 主线程，或显式切换回主线程。避免在生命周期实现里使用 `async void`，让完成、取消和异常都通过返回的 `Task` 传播。
 
-## 6. Unity 的显式退出流程
+## 6. 异步关闭
 
-如果项目还有异步内容卸载，应先等待卸载完成，再关闭架构。可以让 Bootstrap 要求显式关闭：
+包含 `IAsyncDeinitializable` 时必须等待异步清理：
 
 ```csharp
+await battle.DisposeAsync(cancellationToken);
+await architecture.ShutdownAsync(cancellationToken);
+```
+
+同步 `Dispose`/`Shutdown` 仍可用于完全同步的服务树。如果同步关闭遇到只能异步清理的服务，会完成其余清理并报告错误。
+
+## 7. Unity 异步 Bootstrap
+
+`AsyncArchitectureBootstrap` 在 `Awake` 启动初始化，并通过 `Initialization` 暴露可等待状态：
+
+```csharp
+using System.Threading;
 using System.Threading.Tasks;
 using ZArch;
-using ZArch.GameModules;
 using ZArch.Unity;
 
-public sealed class GameBootstrap : ArchitectureBootstrap
+public sealed class GameBootstrap : AsyncArchitectureBootstrap
 {
-    protected override bool RequiresExplicitShutdown => true;
-
-    protected override Architecture CreateArchitecture()
-        => new Architecture();
-
-    protected override void ConfigureRoot(ArchitectureScope scope) { }
-
-    public async Task ExitGameAsync(IGameModuleLauncher launcher)
+    protected override Task ConfigureRootAsync(
+        ArchitectureScope scope,
+        CancellationToken cancellationToken)
     {
-        await launcher.ShutdownAsync();
-        ShutdownArchitecture();
+        scope.Register<OnlineService>(new OnlineService());
+        return Task.CompletedTask;
     }
+
+    public Task ShutdownAsync(CancellationToken cancellationToken = default)
+        => ShutdownArchitectureAsync(cancellationToken);
 }
 ```
 
-不要让 Unity 销毁 Bootstrap 后仍有服务尝试访问 Architecture。
+依赖根 Scope 的组件先等待：
+
+```csharp
+await bootstrap.Initialization;
+var root = bootstrap.RootScope;
+```
+
+异步 Bootstrap 默认要求显式关闭。退出时等待 `ShutdownAsync` 完成后再销毁 Bootstrap，不要使用 `async void` 承载关闭流程。
 
 下一篇：[GameModules](06-Game-Modules.md)

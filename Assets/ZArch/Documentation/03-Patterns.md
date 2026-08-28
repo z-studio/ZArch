@@ -29,7 +29,7 @@ public sealed class PlayerModel : AbstractModel, IPlayerModel {
 
     protected override void OnInit() {
         var storage = this.GetUtility<IStorage>();
-        Gold.SetValueWithoutEvent(storage.LoadGold());
+        Gold.SetValueWithoutNotify(storage.LoadGold());
     }
 
     protected override void OnDeinit() { }
@@ -138,13 +138,13 @@ IUnregister subscription = model.Hp.Register(OnHpChanged);
 监听并立即获得当前值：
 
 ```csharp
-model.Hp.RegisterWithInitValue(OnHpChanged);
+model.Hp.RegisterAndInvoke(OnHpChanged);
 ```
 
 初始化数据但不广播：
 
 ```csharp
-model.Hp.SetValueWithoutEvent(saveData.Hp);
+model.Hp.SetValueWithoutNotify(saveData.Hp);
 ```
 
 自定义比较器：
@@ -182,7 +182,7 @@ this.RegisterArchitectureEvent<PlayerLoggedIn>(OnLoggedIn)
 Controller：
 
 ```csharp
-model.Hp.RegisterWithInitValue(UpdateHp)
+model.Hp.RegisterAndInvoke(UpdateHp)
     .UnregisterWhenGameObjectDestroyed(gameObject);
 ```
 

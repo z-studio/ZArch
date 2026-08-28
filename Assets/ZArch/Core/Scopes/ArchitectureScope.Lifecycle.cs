@@ -103,7 +103,7 @@ namespace ZArch {
 
             if (instance is IInitializable initializable) {
                 initializable.Initialize();
-            } else if (instance is not IDeinitializable) {
+            } else if (instance is not IDeinitializable && instance is not IAsyncDeinitializable) {
                 return;
             }
 
@@ -132,7 +132,7 @@ namespace ZArch {
                     break;
 
                 default: {
-                    if (instance is not IDeinitializable) {
+                    if (instance is not IDeinitializable && instance is not IAsyncDeinitializable) {
                         return;
                     }
 
@@ -180,7 +180,10 @@ namespace ZArch {
         }
 
         private static bool HasLifecycle(object instance) {
-            return instance is IInitializable or IAsyncInitializable or IDeinitializable;
+            return instance is IInitializable
+                or IAsyncInitializable
+                or IDeinitializable
+                or IAsyncDeinitializable;
         }
 
         private void EnsureConfigurable() {
@@ -213,11 +216,12 @@ namespace ZArch {
                 return;
             }
 
+            var cleanupExceptions = new List<Exception>();
             State = EScopeState.Disposing;
-            TryCleanup(m_LifetimeCts.Cancel);
+            TryCleanup(m_LifetimeCts.Cancel, cleanupExceptions);
 
             for (var i = m_Children.Count - 1; i >= 0; i--) {
-                TryCleanup(m_Children[i].Dispose);
+                TryCleanup(m_Children[i].Dispose, cleanupExceptions);
             }
 
             m_Children.Clear();
@@ -226,7 +230,7 @@ namespace ZArch {
             m_EventUnregisters.Clear();
 
             foreach (var unregister in eventUnregisters) {
-                TryCleanup(unregister.Unregister);
+                TryCleanup(unregister.Unregister, cleanupExceptions);
             }
 
             m_Events.Clear();
@@ -237,9 +241,14 @@ namespace ZArch {
                 try {
                     if (instance is IDeinitializable deinitializable) {
                         deinitializable.Deinitialize();
+                    } else if (instance is IAsyncDeinitializable) {
+                        throw new InvalidOperationException(
+                            $"{instance.GetType().FullName} requires asynchronous cleanup. "
+                            + "Use ArchitectureScope.DisposeAsync or Architecture.ShutdownAsync."
+                        );
                     }
                 } catch (Exception exception) {
-                    Architecture.ReportException(exception);
+                    cleanupExceptions.Add(exception);
                 }
             }
 
@@ -248,7 +257,7 @@ namespace ZArch {
 
             for (var i = m_OwnedInstances.Count - 1; i >= 0; i--) {
                 if (m_OwnedInstances[i] is IDisposable disposable) {
-                    TryCleanup(disposable.Dispose);
+                    TryCleanup(disposable.Dispose, cleanupExceptions);
                 }
             }
 
@@ -257,17 +266,109 @@ namespace ZArch {
             m_Registrations.Clear();
             m_RegistrationOrder.Clear();
             State = EScopeState.Disposed;
-            TryCleanup(m_LifetimeCts.Dispose);
+            TryCleanup(m_LifetimeCts.Dispose, cleanupExceptions);
             Parent?.m_Children.Remove(this);
             Architecture.OnScopeDisposed(this);
+            ReportCleanupExceptions(cleanupExceptions);
         }
 
-        private void TryCleanup(Action cleanup) {
+        public Task DisposeAsync(CancellationToken cancellationToken = default) {
+            if (State == EScopeState.Disposed) {
+                return Task.CompletedTask;
+            }
+
+            if (m_DisposeTask != null) {
+                return m_DisposeTask;
+            }
+
+            if (State == EScopeState.Disposing) {
+                return Task.CompletedTask;
+            }
+
+            m_DisposeTask = DisposeAsyncCore(cancellationToken);
+            return m_DisposeTask;
+        }
+
+        private async Task DisposeAsyncCore(CancellationToken cancellationToken) {
+            var cleanupExceptions = new List<Exception>();
+            State = EScopeState.Disposing;
+            TryCleanup(m_LifetimeCts.Cancel, cleanupExceptions);
+
+            for (var i = m_Children.Count - 1; i >= 0; i--) {
+                try {
+                    await m_Children[i].DisposeAsync(cancellationToken).ConfigureAwait(true);
+                } catch (Exception exception) {
+                    cleanupExceptions.Add(exception);
+                }
+            }
+
+            m_Children.Clear();
+
+            var eventUnregisters = new List<TrackedEventUnregister>(m_EventUnregisters);
+            m_EventUnregisters.Clear();
+
+            foreach (var unregister in eventUnregisters) {
+                TryCleanup(unregister.Unregister, cleanupExceptions);
+            }
+
+            m_Events.Clear();
+
+            for (var i = m_InitializedInstances.Count - 1; i >= 0; i--) {
+                var instance = m_InitializedInstances[i];
+
+                try {
+                    if (instance is IAsyncDeinitializable asyncDeinitializable) {
+                        var task = asyncDeinitializable.DeinitializeAsync(cancellationToken)
+                                   ?? throw new InvalidOperationException(
+                                       $"{instance.GetType().FullName}.DeinitializeAsync returned null."
+                                   );
+                        await task.ConfigureAwait(true);
+                    } else if (instance is IDeinitializable deinitializable) {
+                        deinitializable.Deinitialize();
+                    }
+                } catch (Exception exception) {
+                    cleanupExceptions.Add(exception);
+                }
+            }
+
+            m_InitializedInstances.Clear();
+            m_InitializedSet.Clear();
+
+            for (var i = m_OwnedInstances.Count - 1; i >= 0; i--) {
+                if (m_OwnedInstances[i] is IDisposable disposable) {
+                    TryCleanup(disposable.Dispose, cleanupExceptions);
+                }
+            }
+
+            m_OwnedInstances.Clear();
+            m_OwnedSet.Clear();
+            m_Registrations.Clear();
+            m_RegistrationOrder.Clear();
+            State = EScopeState.Disposed;
+            TryCleanup(m_LifetimeCts.Dispose, cleanupExceptions);
+            Parent?.m_Children.Remove(this);
+            Architecture.OnScopeDisposed(this);
+            ReportCleanupExceptions(cleanupExceptions);
+        }
+
+        private static void TryCleanup(Action cleanup, List<Exception> cleanupExceptions) {
             try {
                 cleanup?.Invoke();
             } catch (Exception exception) {
-                Architecture.ReportException(exception);
+                cleanupExceptions.Add(exception);
             }
+        }
+
+        private void ReportCleanupExceptions(List<Exception> cleanupExceptions) {
+            if (cleanupExceptions.Count == 0) {
+                return;
+            }
+
+            Architecture.ReportUnhandledException(
+                cleanupExceptions.Count == 1
+                    ? cleanupExceptions[0]
+                    : new AggregateException($"Scope '{Name}' cleanup failed.", cleanupExceptions)
+            );
         }
     }
 }

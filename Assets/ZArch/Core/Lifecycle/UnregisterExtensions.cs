@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 
 namespace ZArch {
-    public static class UnregisterListExtension {
+    public static class UnregisterListExtensions {
         private sealed class TrackedUnregister : IUnregister {
             private List<IUnregister> m_Owner;
             private IUnregister m_Unregister;

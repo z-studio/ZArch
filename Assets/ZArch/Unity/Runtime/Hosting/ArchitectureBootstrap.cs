@@ -8,15 +8,15 @@ namespace ZArch.Unity {
         public Architecture Architecture { get; private set; }
         public ArchitectureScope RootScope { get; private set; }
 
-        protected virtual bool DontDestroy => true;
+        protected virtual bool PersistAcrossScenes => true;
         protected virtual bool RequiresExplicitShutdown => false;
         protected virtual string RootScopeName => "App";
 
-        protected abstract Architecture CreateArchitecture();
+        protected virtual Architecture CreateArchitecture() => new();
         protected abstract void ConfigureRoot(ArchitectureScope scope);
 
         protected virtual void Awake() {
-            if (DontDestroy) {
+            if (PersistAcrossScenes) {
                 DontDestroyOnLoad(gameObject);
             }
 
@@ -25,7 +25,7 @@ namespace ZArch.Unity {
 
             try {
                 Architecture.Start();
-                Architecture.ExceptionHandler = Debug.LogException;
+                Architecture.UnhandledExceptionHandler = Debug.LogException;
                 RootScope = Architecture.CreateRootScope(RootScopeName, ConfigureRoot);
             } catch {
                 Architecture.Shutdown();

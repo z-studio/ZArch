@@ -12,9 +12,6 @@ using ZArch.Unity;
 
 public sealed class GameBootstrap : ArchitectureBootstrap
 {
-    protected override Architecture CreateArchitecture()
-        => new Architecture();
-
     protected override void ConfigureRoot(ArchitectureScope scope)
     {
         scope.Register<IPlayerRepository>(new PlayerRepository());
@@ -31,9 +28,9 @@ public sealed class GameBootstrap : ArchitectureBootstrap
 | 成员 | 默认值 | 用途 |
 | --- | --- | --- |
 | `RootScopeName` | `App` | 根 Scope 名称 |
-| `DontDestroy` | `true` | 是否调用 `DontDestroyOnLoad` |
+| `PersistAcrossScenes` | `true` | 是否调用 `DontDestroyOnLoad` |
 | `RequiresExplicitShutdown` | `false` | 未显式关闭时是否报告错误 |
-| `CreateArchitecture()` | 必须实现 | 创建架构实例 |
+| `CreateArchitecture()` | 新 `Architecture` | 需要自定义 Architecture 子类时覆写 |
 | `ConfigureRoot(scope)` | 必须实现 | 注册根服务 |
 
 如果设置 `RequiresExplicitShutdown = true`，必须在自己的退出流程中调用受保护的 `ShutdownArchitecture()`。
@@ -110,7 +107,7 @@ this.RegisterArchitectureEvent<SceneStateChangedEvent>(OnSceneStateChanged)
 
 ## 4. 场景 Scope
 
-`SceneScopeBinder` 可以让场景加载时创建 Scope、卸载时自动释放：
+`SceneScopeManager` 可以让场景加载时创建 Scope、卸载时自动释放：
 
 ```csharp
 using ZArch;
@@ -118,10 +115,7 @@ using ZArch.Unity;
 
 public sealed class GameBootstrap : ArchitectureBootstrap
 {
-    private SceneScopeBinder m_SceneScopeBinder;
-
-    protected override Architecture CreateArchitecture()
-        => new Architecture();
+    private SceneScopeManager m_SceneScopeManager;
 
     protected override void ConfigureRoot(ArchitectureScope root)
     {
@@ -132,8 +126,8 @@ public sealed class GameBootstrap : ArchitectureBootstrap
     {
         base.Awake();
 
-        m_SceneScopeBinder = new SceneScopeBinder(Architecture);
-        m_SceneScopeBinder.Bind(
+        m_SceneScopeManager = new SceneScopeManager(Architecture);
+        m_SceneScopeManager.Bind(
             "Battle",
             battle =>
             {
@@ -141,12 +135,12 @@ public sealed class GameBootstrap : ArchitectureBootstrap
                 battle.Register<BattleSystem>(new BattleSystem());
             },
             _ => RootScope);
-        m_SceneScopeBinder.Enable();
+        m_SceneScopeManager.Enable();
     }
 
     protected override void OnDestroy()
     {
-        m_SceneScopeBinder?.Dispose();
+        m_SceneScopeManager?.Dispose();
         base.OnDestroy();
     }
 }
@@ -154,7 +148,7 @@ public sealed class GameBootstrap : ArchitectureBootstrap
 
 第三个参数返回父 Scope。省略它时会创建独立的根 Scope；返回 `RootScope` 时会创建根 Scope 的子 Scope。绑定标识既可以是场景名，也可以是场景路径。
 
-`SceneScopeBinder` 管理 Scope 生命周期，但不会自动寻找并绑定所有 Controller。场景入口仍应显式决定哪些对象使用哪个 Scope。
+`SceneScopeManager` 管理 Scope 生命周期，但不会自动寻找并绑定所有 Controller。场景入口仍应显式决定哪些对象使用哪个 Scope。
 
 ## 5. BindableProperty 在 Unity 中的比较规则
 
@@ -162,7 +156,7 @@ Unity Runtime 会在场景加载前为常见 Unity 类型注册比较器。例�
 
 ## 6. 调试 Scope 树
 
-运行时可以用 `ArchDebug.Capture(architecture)` 获取当前架构快照。编辑器中的 ZArch 调试窗口用于查看 Scope 层级、服务注册和状态。
+运行时可以用 `ArchitectureDebug.Capture(architecture)` 获取当前架构快照。编辑器中的 Architecture Debug 窗口用于查看 Scope 层级、服务注册和状态。
 
 排查问题时优先确认：
 

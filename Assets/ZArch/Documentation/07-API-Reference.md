@@ -8,12 +8,13 @@
 | --- | --- |
 | `Start()` | 启动 Architecture；创建 Scope 前必须调用 |
 | `Shutdown()` | 关闭所有 Scope 与服务；实例不可再次启动 |
+| `ShutdownAsync(token)` | 等待异步反初始化后关闭 |
 | `CreateRootScope(name, setup, tag)` | 同步创建根 Scope |
 | `CreateRootScopeAsync(...)` | 异步创建根 Scope，可设置 timeout/token |
 | `RegisterEvent<T>(handler)` | 注册 Architecture 级事件 |
 | `SendEvent<T>(event)` | 发送 Architecture 级事件 |
 | `UnregisterEvent<T>(handler)` | 按处理函数解除注册 |
-| `ExceptionHandler` | 接收生命周期清理阶段报告的异常 |
+| `UnhandledExceptionHandler` | 接收框架捕获后报告的异常；为空时向调用方抛出 |
 
 ## ArchitectureScope
 
@@ -22,7 +23,9 @@
 | `CreateChild(...)` / `CreateChildAsync(...)` | 创建子 Scope |
 | `Register<T>(instance, owned, initializationOrder)` | 注册实例 |
 | `Register<TService,TImplementation>(...)` | 通过无参构造创建实现 |
-| `RegisterFactory<T>(factory, lifetime, owned, order)` | 注册 Scoped/Transient Factory |
+| `RegisterScopedFactory<T>(factory, owned, order)` | 注册每个 Scope 一个实例的 Factory |
+| `RegisterTransient<T>(factory)` | 注册调用方拥有的 Transient |
+| `RegisterOwnedTransient<T>(factory)` | 注册由 Scope 统一 Dispose 的 Transient |
 | `RegisterAlias<TAlias,TService>()` | 为同一 Scoped 实例添加服务键 |
 | `Resolve<T>()` | 从当前 Scope 向父级解析必需服务 |
 | `TryResolve<T>(out value)` | 尝试解析可选服务 |
@@ -30,6 +33,7 @@
 | `RegisterEvent<T>(handler)` | 注册 Scope 事件 |
 | `Publish<T>(event, propagation)` | 向当前 Scope 或父级发布 |
 | `Dispose()` | 释放子 Scope、服务、事件与注册 |
+| `DisposeAsync(token)` | 等待异步反初始化并释放 Scope |
 
 常用枚举：
 
@@ -45,6 +49,7 @@
 | `IInitializable` | `Initialize()` | Scope 激活时同步初始化 |
 | `IAsyncInitializable` | `InitializeAsync(token)` | 仅异步 Scope 支持 |
 | `IDeinitializable` | `Deinitialize()` | Scope 释放时逆序执行 |
+| `IAsyncDeinitializable` | `DeinitializeAsync(token)` | 异步释放时逆序等待 |
 | `IDisposable` | `Dispose()` | Owned 对象的最终释放 |
 
 同步创建 Scope 时如果发现 `IAsyncInitializable`，会直接失败并回滚。
@@ -71,8 +76,8 @@ Model 与 System 的基类为 `AbstractModel`、`AbstractSystem`；Command/Query
 | --- | --- |
 | `Value` | 读取或修改值；变化时通知 |
 | `Register(handler)` | 监听后续变化 |
-| `RegisterWithInitValue(handler)` | 注册并立即回调当前值 |
-| `SetValueWithoutEvent(value)` | 修改但不通知 |
+| `RegisterAndInvoke(handler)` | 注册并立即回调当前值 |
+| `SetValueWithoutNotify(value)` | 修改但不通知 |
 | `WithComparer(comparer)` | 设置实例级相等比较 |
 | `BindableProperty<T>.Comparer` | 设置类型级默认比较器 |
 | `Unregister(handler)` | 按处理函数解除监听 |
@@ -84,12 +89,13 @@ Model 与 System 的基类为 `AbstractModel`、`AbstractSystem`；Command/Query
 | API | 用途 |
 | --- | --- |
 | `ArchitectureBootstrap` | 创建 Architecture 与根 Scope |
+| `AsyncArchitectureBootstrap` | 创建异步根 Scope，并暴露 `Initialization` |
 | `ArchitectureController.BindScope(scope)` | 绑定组件使用的 Scope |
-| `SceneScopeBinder` | 根据场景加载/卸载管理 Scope |
+| `SceneScopeManager` | 根据场景加载/卸载管理 Scope |
 | `UnregisterWhenDisabled(...)` | Behaviour 禁用时解除监听 |
 | `UnregisterWhenGameObjectDestroyed(...)` | 对象销毁时解除监听 |
 | `UnregisterWhenSceneUnloaded(...)` | 场景卸载时解除监听 |
-| `ArchDebug.Capture(architecture)` | 捕获运行时架构快照 |
+| `ArchitectureDebug.Capture(architecture)` | 捕获运行时架构快照 |
 
 ## GameModules
 

@@ -102,7 +102,7 @@ scope.Register<IStorage, LocalStorage>();
 ### Factory
 
 ```csharp
-scope.RegisterFactory<IRepository>(resolver =>
+scope.RegisterScopedFactory<IRepository>(resolver =>
     new Repository(resolver.Resolve<IStorage>()));
 ```
 
@@ -111,14 +111,16 @@ scope.RegisterFactory<IRepository>(resolver =>
 Transient 每次解析创建一个实例：
 
 ```csharp
-scope.RegisterFactory<IEnemy>(
-    _ => new Enemy(),
-    EServiceLifetime.Transient,
-    owned: false
-);
+scope.RegisterTransient<IEnemy>(_ => new Enemy());
 ```
 
-Owned Transient 不能实现 ZArch 生命周期接口。需要生命周期的服务应使用 Scoped。
+Transient 默认由调用方管理，不会被 Scope 持有。确实需要 Scope 在结束时统一 `Dispose` 每个实例时，显式注册：
+
+```csharp
+scope.RegisterOwnedTransient<ITemporaryBuffer>(_ => new TemporaryBuffer());
+```
+
+Owned Transient 不能实现 ZArch 生命周期接口。需要初始化或反初始化的服务应使用 Scoped。
 
 ### Alias
 
@@ -177,6 +179,10 @@ public interface IInitializable {
 public interface IDeinitializable {
     void Deinitialize();
 }
+
+public interface IAsyncDeinitializable {
+    Task DeinitializeAsync(CancellationToken cancellationToken);
+}
 ```
 
 Owned Scoped 服务按 `initializationOrder`、再按注册顺序初始化：
@@ -196,6 +202,15 @@ scope.Register(gameplay, initializationOrder: 100);
 5. 清理注册表并脱离父 Scope。
 
 初始化失败会回滚已经初始化和拥有的对象，失败 Scope 不会挂到 Architecture 树中。
+
+包含异步反初始化服务时，等待完整清理：
+
+```csharp
+await scope.DisposeAsync(cancellationToken);
+await architecture.ShutdownAsync(cancellationToken);
+```
+
+同步 `Dispose` 遇到仅支持异步清理的服务会报告错误。清理过程仍会继续处理其余服务，最后将异常交给 `UnhandledExceptionHandler`；没有设置处理器时向调用方抛出。
 
 ## 6. Architecture Event 与 Scope Event
 

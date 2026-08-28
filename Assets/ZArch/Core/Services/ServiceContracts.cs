@@ -15,7 +15,7 @@ namespace ZArch {
         bool TryResolve<T>(out T instance) where T : class;
     }
 
-    public sealed class ServiceDebugInfo {
+    internal sealed class ServiceDebugInfo {
         public Type ServiceType { get; internal set; }
         public Type ImplementationType { get; internal set; }
         public EServiceLifetime Lifetime { get; internal set; }
