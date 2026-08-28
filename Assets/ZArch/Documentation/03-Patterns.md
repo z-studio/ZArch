@@ -6,10 +6,10 @@ Patterns 是可选策略层，提供 Model、System、Utility、Controller、Com
 
 | 角色 | 主要职责 | 可用能力 |
 |---|---|---|
-| Model | 保存数据和数据操作 | Utility、发送 Host Event |
-| System | 实现共享规则 | Model、System、Utility、Host Event |
-| Controller | 连接输入和表现 | Model、System、Utility、Command、Query、Host Event |
-| Command | 执行一次操作 | Model、System、Utility、Command、Query、Host Event |
+| Model | 保存数据和数据操作 | Utility、发送 Architecture Event |
+| System | 实现共享规则 | Model、System、Utility、Architecture Event |
+| Controller | 连接输入和表现 | Model、System、Utility、Command、Query、Architecture Event |
+| Command | 执行一次操作 | Model、System、Utility、Command、Query、Architecture Event |
 | Query | 读取一次结果 | Model、System、Query |
 | Utility | 基础设施 | 不获得架构能力 |
 
@@ -160,7 +160,7 @@ Unity Runtime 会为常用 Unity 值类型注册比较器，`float` 默认使用
 
 ```csharp
 private readonly BindableProperty<int> m_Hp = new(100);
-public IReadonlyBindableProperty<int> Hp => m_Hp;
+public IReadOnlyBindableProperty<int> Hp => m_Hp;
 ```
 
 ## 8. Event 与 BindableProperty 的选择

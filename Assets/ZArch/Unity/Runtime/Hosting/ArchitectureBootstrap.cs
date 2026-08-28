@@ -2,7 +2,7 @@ using System;
 using UnityEngine;
 
 namespace ZArch.Unity {
-    public abstract class ArchitectureHostBootstrap : MonoBehaviour {
+    public abstract class ArchitectureBootstrap : MonoBehaviour {
         private bool m_WasExplicitlyShutdown;
 
         public Architecture Architecture { get; private set; }

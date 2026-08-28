@@ -4,16 +4,16 @@ ZArch 的 Unity 层只负责把纯 C# 架构接入 Unity 生命周期。核心�
 
 ## 1. 创建启动入口
 
-在首个场景中放置一个继承 `ArchitectureHostBootstrap` 的组件：
+在首个场景中放置一个继承 `ArchitectureBootstrap` 的组件：
 
 ```csharp
 using ZArch;
 using ZArch.Unity;
 
-public sealed class GameBootstrap : ArchitectureHostBootstrap
+public sealed class GameBootstrap : ArchitectureBootstrap
 {
     protected override Architecture CreateArchitecture()
-        => new ArchitectureHost();
+        => new Architecture();
 
     protected override void ConfigureRoot(ArchitectureScope scope)
     {
@@ -24,7 +24,7 @@ public sealed class GameBootstrap : ArchitectureHostBootstrap
 }
 ```
 
-组件在 `Awake` 中创建并启动 `ArchitectureHost`，然后建立根 Scope。默认会跨场景保留，并在销毁时关闭架构。
+组件在 `Awake` 中创建并启动 `Architecture`，然后建立根 Scope。默认会跨场景保留，并在销毁时关闭架构。
 
 常用覆写项：
 
@@ -116,12 +116,12 @@ this.RegisterArchitectureEvent<SceneStateChangedEvent>(OnSceneStateChanged)
 using ZArch;
 using ZArch.Unity;
 
-public sealed class GameBootstrap : ArchitectureHostBootstrap
+public sealed class GameBootstrap : ArchitectureBootstrap
 {
     private SceneScopeBinder m_SceneScopeBinder;
 
     protected override Architecture CreateArchitecture()
-        => new ArchitectureHost();
+        => new Architecture();
 
     protected override void ConfigureRoot(ArchitectureScope root)
     {

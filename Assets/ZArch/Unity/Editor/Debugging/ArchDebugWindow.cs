@@ -5,8 +5,8 @@ namespace ZArch.Unity.Editor {
     public sealed class ArchDebugWindow : EditorWindow {
         private Vector2 m_Scroll;
         private ArchDebugInfo m_Info;
-        private ArchitectureHostBootstrap[] m_Hosts = System.Array.Empty<ArchitectureHostBootstrap>();
-        private int m_SelectedHost;
+        private ArchitectureBootstrap[] m_Bootstraps = System.Array.Empty<ArchitectureBootstrap>();
+        private int m_SelectedBootstrap;
         private double m_NextRefresh;
 
         [MenuItem("Tools/ZArch/Arch Debug")]
@@ -46,21 +46,21 @@ namespace ZArch.Unity.Editor {
 
             m_Info ??= CaptureSelected();
 
-            if (m_Hosts.Length == 0) {
-                EditorGUILayout.HelpBox("没有找到 ArchitectureHostBootstrap。", MessageType.Warning);
+            if (m_Bootstraps.Length == 0) {
+                EditorGUILayout.HelpBox("没有找到 ArchitectureBootstrap。", MessageType.Warning);
                 return;
             }
 
-            var names = new string[m_Hosts.Length];
+            var names = new string[m_Bootstraps.Length];
 
-            for (var i = 0; i < m_Hosts.Length; i++) {
-                names[i] = m_Hosts[i].name;
+            for (var i = 0; i < m_Bootstraps.Length; i++) {
+                names[i] = m_Bootstraps[i].name;
             }
 
-            var selected = EditorGUILayout.Popup("Host", m_SelectedHost, names);
+            var selected = EditorGUILayout.Popup("Bootstrap", m_SelectedBootstrap, names);
 
-            if (selected != m_SelectedHost) {
-                m_SelectedHost = selected;
+            if (selected != m_SelectedBootstrap) {
+                m_SelectedBootstrap = selected;
                 m_Info = CaptureSelected();
             }
 
@@ -85,24 +85,24 @@ namespace ZArch.Unity.Editor {
         }
 
         private void Refresh() {
-            m_Hosts = Object.FindObjectsByType<ArchitectureHostBootstrap>(
+            m_Bootstraps = Object.FindObjectsByType<ArchitectureBootstrap>(
                 FindObjectsInactive.Include,
                 FindObjectsSortMode.None
             );
 
-            if (m_SelectedHost >= m_Hosts.Length) {
-                m_SelectedHost = 0;
+            if (m_SelectedBootstrap >= m_Bootstraps.Length) {
+                m_SelectedBootstrap = 0;
             }
 
             m_Info = CaptureSelected();
         }
 
         private ArchDebugInfo CaptureSelected() {
-            if (m_Hosts.Length == 0) {
+            if (m_Bootstraps.Length == 0) {
                 return new ArchDebugInfo();
             }
 
-            return ArchDebug.Capture(m_Hosts[m_SelectedHost].Architecture);
+            return ArchDebug.Capture(m_Bootstraps[m_SelectedBootstrap].Architecture);
         }
 
         private static void DrawScope(ScopeDebugInfo scope, int depth) {

@@ -10,8 +10,8 @@
 | `Shutdown()` | 关闭所有 Scope 与服务；实例不可再次启动 |
 | `CreateRootScope(name, setup, tag)` | 同步创建根 Scope |
 | `CreateRootScopeAsync(...)` | 异步创建根 Scope，可设置 timeout/token |
-| `RegisterEvent<T>(handler)` | 注册 Host 级事件 |
-| `SendEvent<T>(event)` | 发送 Host 级事件 |
+| `RegisterEvent<T>(handler)` | 注册 Architecture 级事件 |
+| `SendEvent<T>(event)` | 发送 Architecture 级事件 |
 | `UnregisterEvent<T>(handler)` | 按处理函数解除注册 |
 | `ExceptionHandler` | 接收生命周期清理阶段报告的异常 |
 
@@ -58,8 +58,8 @@
 | `GetUtility<T>()` | 解析 Utility |
 | `SendCommand(command)` | 执行 Command |
 | `SendQuery(query)` | 执行 Query |
-| `RegisterArchitectureEvent<T>()` | 注册 Host Event |
-| `SendArchitectureEvent<T>()` | 发送 Host Event |
+| `RegisterArchitectureEvent<T>()` | 注册 Architecture Event |
+| `SendArchitectureEvent<T>()` | 发送 Architecture Event |
 | `RegisterScopeEvent<T>()` | 注册 Scope Event |
 | `PublishScopeEvent<T>()` | 发布 Scope Event |
 
@@ -77,13 +77,13 @@ Model 与 System 的基类为 `AbstractModel`、`AbstractSystem`；Command/Query
 | `BindableProperty<T>.Comparer` | 设置类型级默认比较器 |
 | `Unregister(handler)` | 按处理函数解除监听 |
 
-对外只读时暴露 `IReadonlyBindableProperty<T>`，内部保留 `BindableProperty<T>`。
+对外只读时暴露 `IReadOnlyBindableProperty<T>`，内部保留 `BindableProperty<T>`。
 
 ## Unity
 
 | API | 用途 |
 | --- | --- |
-| `ArchitectureHostBootstrap` | 创建 Architecture 与根 Scope |
+| `ArchitectureBootstrap` | 创建 Architecture 与根 Scope |
 | `ArchitectureController.BindScope(scope)` | 绑定组件使用的 Scope |
 | `SceneScopeBinder` | 根据场景加载/卸载管理 Scope |
 | `UnregisterWhenDisabled(...)` | Behaviour 禁用时解除监听 |
@@ -97,11 +97,11 @@ Model 与 System 的基类为 `AbstractModel`、`AbstractSystem`；Command/Query
 | --- | --- |
 | `IGameModule.Configure(scope, context)` | 配置模块 Scope |
 | `GameModuleCatalog` | Unity 模块资产目录 |
-| `GameLauncher.EnterAsync(id, context, token)` | 进入模块 |
-| `GameLauncher.ExitAsync()` | 退出当前模块 |
-| `GameLauncher.ShutdownAsync()` | 完整关闭并禁止再次进入 |
+| `GameModuleLauncher.EnterAsync(id, context, token)` | 进入模块 |
+| `GameModuleLauncher.ExitAsync()` | 退出当前模块 |
+| `GameModuleLauncher.ShutdownAsync()` | 完整关闭并禁止再次进入 |
 | `UnityGameContentLoader` | 通过 Scene Provider 加载内容 |
-| `GameSceneEntry` | 将已加载场景绑定到模块 Scope |
+| `GameModuleSceneEntry` | 将已加载场景绑定到模块 Scope |
 
 ## 常见异常定位
 

@@ -8,22 +8,22 @@ using UnityEngine.TestTools;
 namespace ZArch.Tests.Editor {
     [TestFixture]
     public sealed class ArchitectureTests {
-        private ArchitectureHost m_Host;
+        private Architecture m_Architecture;
 
         [SetUp]
         public void SetUp() {
-            m_Host = new ArchitectureHost();
-            m_Host.Start();
+            m_Architecture = new Architecture();
+            m_Architecture.Start();
         }
 
         [TearDown]
-        public void TearDown() => m_Host.Dispose();
+        public void TearDown() => m_Architecture.Dispose();
 
         [Test]
         public void Resolve_StartsAtRequestingScopeAndFallsBackToParent() {
             var parentModel = new TestModel("parent");
             var childModel = new TestModel("child");
-            var root = m_Host.CreateRootScope("Root", scope => scope.Register(parentModel));
+            var root = m_Architecture.CreateRootScope("Root", scope => scope.Register(parentModel));
             var child = root.CreateChild("Child", scope => scope.Register(childModel));
             var sibling = root.CreateChild("Sibling", _ => { });
 
@@ -37,7 +37,7 @@ namespace ZArch.Tests.Editor {
             ProbeSystem system = null;
             var model = new TestModel("model");
 
-            m_Host.CreateRootScope("Root", scope => {
+            m_Architecture.CreateRootScope("Root", scope => {
                 scope.Register(model);
                 scope.Register(system = new ProbeSystem());
             });
@@ -50,46 +50,46 @@ namespace ZArch.Tests.Editor {
             var initialized = new TrackingSystem();
 
             Assert.Throws<InvalidOperationException>(() =>
-                m_Host.CreateRootScope("Broken", scope => {
+                m_Architecture.CreateRootScope("Broken", scope => {
                     scope.Register(initialized);
                     scope.Register(new FailingSystem());
                 })
             );
 
             Assert.That(initialized.DeinitializeCount, Is.EqualTo(1));
-            Assert.That(m_Host.RootScopes, Is.Empty);
+            Assert.That(m_Architecture.RootScopes, Is.Empty);
         }
 
         [Test]
         public void CircularFactoryDependency_IsRejectedAndRolledBack() {
             Assert.Throws<InvalidOperationException>(() =>
-                m_Host.CreateRootScope("Circular", scope => {
+                m_Architecture.CreateRootScope("Circular", scope => {
                     scope.RegisterFactory<ServiceA>(resolver => new ServiceA(resolver.Resolve<ServiceB>()));
                     scope.RegisterFactory<ServiceB>(resolver => new ServiceB(resolver.Resolve<ServiceA>()));
                 })
             );
 
-            Assert.That(m_Host.RootScopes, Is.Empty);
+            Assert.That(m_Architecture.RootScopes, Is.Empty);
         }
 
         [Test]
         public void Configuration_CanInspectRegistrationsButCannotResolveServices() {
             Assert.Throws<InvalidOperationException>(() =>
-                m_Host.CreateRootScope("InvalidConfiguration", scope => {
+                m_Architecture.CreateRootScope("InvalidConfiguration", scope => {
                     scope.Register(new PlainService("configured"));
                     Assert.That(scope.IsRegisteredLocally<PlainService>(), Is.True);
                     scope.Resolve<PlainService>();
                 })
             );
 
-            Assert.That(m_Host.RootScopes, Is.Empty);
-            Assert.That(m_Host.Scopes, Is.Empty);
+            Assert.That(m_Architecture.RootScopes, Is.Empty);
+            Assert.That(m_Architecture.Scopes, Is.Empty);
         }
 
         [Test]
         public async Task AsyncInitialization_CompletesBeforeScopeBecomesActive() {
             var service = new AsyncService();
-            var scope = await m_Host.CreateRootScopeAsync(
+            var scope = await m_Architecture.CreateRootScopeAsync(
                 "Async",
                 configured => {
                     configured.Register(service);
@@ -103,20 +103,20 @@ namespace ZArch.Tests.Editor {
 
         [Test]
         public void MultipleHosts_DoNotShareServicesScopesOrEvents() {
-            using var secondHost = new ArchitectureHost();
-            secondHost.Start();
+            using var secondArchitecture = new Architecture();
+            secondArchitecture.Start();
 
             var firstService = new PlainService("first");
             var secondService = new PlainService("second");
             var firstEventCount = 0;
             var secondEventCount = 0;
 
-            var firstRoot = m_Host.CreateRootScope("Root", scope => scope.Register(firstService));
-            var secondRoot = secondHost.CreateRootScope("Root", scope => scope.Register(secondService));
-            m_Host.RegisterEvent<ProbeEvent>(_ => firstEventCount++);
-            secondHost.RegisterEvent<ProbeEvent>(_ => secondEventCount++);
+            var firstRoot = m_Architecture.CreateRootScope("Root", scope => scope.Register(firstService));
+            var secondRoot = secondArchitecture.CreateRootScope("Root", scope => scope.Register(secondService));
+            m_Architecture.RegisterEvent<ProbeEvent>(_ => firstEventCount++);
+            secondArchitecture.RegisterEvent<ProbeEvent>(_ => secondEventCount++);
 
-            m_Host.SendEvent(new ProbeEvent());
+            m_Architecture.SendEvent(new ProbeEvent());
 
             Assert.That(firstRoot.Resolve<PlainService>(), Is.SameAs(firstService));
             Assert.That(secondRoot.Resolve<PlainService>(), Is.SameAs(secondService));
@@ -129,9 +129,9 @@ namespace ZArch.Tests.Editor {
             var architectureCount = 0;
             var rootCount = 0;
             var childCount = 0;
-            var root = m_Host.CreateRootScope("Root", _ => { });
+            var root = m_Architecture.CreateRootScope("Root", _ => { });
             var child = root.CreateChild("Child", _ => { });
-            m_Host.RegisterEvent<ProbeEvent>(_ => architectureCount++);
+            m_Architecture.RegisterEvent<ProbeEvent>(_ => architectureCount++);
             root.RegisterEvent<ProbeEvent>(_ => rootCount++);
             child.RegisterEvent<ProbeEvent>(_ => childCount++);
 
@@ -151,12 +151,12 @@ namespace ZArch.Tests.Editor {
         [Test]
         public void ArchitectureEvent_InvokesAllSubscribersBeforeThrowingAggregate() {
             var calls = new System.Collections.Generic.List<string>();
-            m_Host.RegisterEvent<ProbeEvent>(_ => calls.Add("first"));
-            m_Host.RegisterEvent<ProbeEvent>(_ => throw new InvalidOperationException("subscriber failed"));
-            m_Host.RegisterEvent<ProbeEvent>(_ => calls.Add("last"));
+            m_Architecture.RegisterEvent<ProbeEvent>(_ => calls.Add("first"));
+            m_Architecture.RegisterEvent<ProbeEvent>(_ => throw new InvalidOperationException("subscriber failed"));
+            m_Architecture.RegisterEvent<ProbeEvent>(_ => calls.Add("last"));
 
             var exception = Assert.Throws<AggregateException>(() =>
-                m_Host.SendEvent(new ProbeEvent())
+                m_Architecture.SendEvent(new ProbeEvent())
             );
 
             Assert.That(calls, Is.EqualTo(new[] { "first", "last" }));
@@ -168,7 +168,7 @@ namespace ZArch.Tests.Editor {
         public void ScopePublish_ContinuesToParentsAfterSubscriberFailure() {
             var rootCalls = 0;
             var childCalls = 0;
-            var root = m_Host.CreateRootScope("Root", _ => { });
+            var root = m_Architecture.CreateRootScope("Root", _ => { });
             var child = root.CreateChild("Child", _ => { });
             child.RegisterEvent<ProbeEvent>(_ => throw new InvalidOperationException("child failed"));
             child.RegisterEvent<ProbeEvent>(_ => childCalls++);
@@ -188,8 +188,8 @@ namespace ZArch.Tests.Editor {
             var architectureCount = 0;
             var localCount = 0;
             EventSenderSystem sender = null;
-            var root = m_Host.CreateRootScope("Root", scope => scope.Register(sender = new EventSenderSystem()));
-            m_Host.RegisterEvent<ProbeEvent>(_ => architectureCount++);
+            var root = m_Architecture.CreateRootScope("Root", scope => scope.Register(sender = new EventSenderSystem()));
+            m_Architecture.RegisterEvent<ProbeEvent>(_ => architectureCount++);
             root.RegisterEvent<ProbeEvent>(_ => localCount++);
 
             sender.Raise();
@@ -201,7 +201,7 @@ namespace ZArch.Tests.Editor {
         [Test]
         public void DeinitializableOnlyService_IsDeinitializedWithItsScope() {
             var service = new DeinitializableOnlyService();
-            var scope = m_Host.CreateRootScope("Root", configured => configured.Register(service));
+            var scope = m_Architecture.CreateRootScope("Root", configured => configured.Register(service));
 
             scope.Dispose();
 
@@ -229,7 +229,7 @@ namespace ZArch.Tests.Editor {
         [Test]
         public void DisposingParent_DisposesChildrenBeforeParentServices() {
             var order = new System.Collections.Generic.List<string>();
-            var root = m_Host.CreateRootScope("Root", scope => scope.Register(new OrderedService("root", order)));
+            var root = m_Architecture.CreateRootScope("Root", scope => scope.Register(new OrderedService("root", order)));
             var child = root.CreateChild("Child", scope => scope.Register(new OrderedService("child", order)));
 
             root.Dispose();
@@ -242,21 +242,21 @@ namespace ZArch.Tests.Editor {
         public void Shutdown_RejectsScopeCreationFromDeinitialize() {
             Exception creationException = null;
 
-            m_Host.CreateRootScope("Root", scope =>
+            m_Architecture.CreateRootScope("Root", scope =>
                 scope.Register(new CallbackService(() => {
                     try {
-                        m_Host.CreateRootScope("Leaked", _ => { });
+                        m_Architecture.CreateRootScope("Leaked", _ => { });
                     } catch (Exception exception) {
                         creationException = exception;
                     }
                 }))
             );
 
-            m_Host.Shutdown();
+            m_Architecture.Shutdown();
 
             Assert.That(creationException, Is.TypeOf<InvalidOperationException>());
-            Assert.That(m_Host.RootScopes, Is.Empty);
-            Assert.That(m_Host.Scopes, Is.Empty);
+            Assert.That(m_Architecture.RootScopes, Is.Empty);
+            Assert.That(m_Architecture.Scopes, Is.Empty);
         }
 
         [Test]
@@ -264,7 +264,7 @@ namespace ZArch.Tests.Editor {
             ArchitectureScope root = null;
             Exception creationException = null;
 
-            root = m_Host.CreateRootScope("Root", scope =>
+            root = m_Architecture.CreateRootScope("Root", scope =>
                 scope.Register(new CallbackService(() => {
                     try {
                         root.CreateChild("Leaked", _ => { });
@@ -277,16 +277,16 @@ namespace ZArch.Tests.Editor {
             root.Dispose();
 
             Assert.That(creationException, Is.TypeOf<ObjectDisposedException>());
-            Assert.That(m_Host.Scopes, Is.Empty);
+            Assert.That(m_Architecture.Scopes, Is.Empty);
         }
 
         [Test]
         public void ThrowingExceptionHandler_DoesNotInterruptScopeCleanup() {
             var cleanupCount = 0;
             var cleaned = new CallbackService(() => cleanupCount++);
-            m_Host.ExceptionHandler = _ => throw new InvalidOperationException("Reporter failed.");
+            m_Architecture.ExceptionHandler = _ => throw new InvalidOperationException("Reporter failed.");
 
-            var scope = m_Host.CreateRootScope("Root", configured => {
+            var scope = m_Architecture.CreateRootScope("Root", configured => {
                 configured.Register(cleaned);
                 configured.Register<IDeinitializable>(
                     new CallbackService(() => throw new InvalidOperationException("Cleanup failed."))
@@ -301,7 +301,7 @@ namespace ZArch.Tests.Editor {
         [Test]
         public void ChildAlias_DoesNotRebindParentServiceContext() {
             var system = new AliasSystem();
-            var root = m_Host.CreateRootScope("Root", scope => scope.Register(system));
+            var root = m_Architecture.CreateRootScope("Root", scope => scope.Register(system));
             var child = root.CreateChild("Child", scope => scope.RegisterAlias<IAliasSystem, AliasSystem>());
 
             Assert.That(child.Resolve<IAliasSystem>(), Is.SameAs(system));
@@ -315,20 +315,20 @@ namespace ZArch.Tests.Editor {
         [Test]
         public void InvalidAsyncTimeout_DoesNotLeaveUnconfiguredScope() {
             Assert.ThrowsAsync<ArgumentOutOfRangeException>(async () =>
-                await m_Host.CreateRootScopeAsync(
+                await m_Architecture.CreateRootScopeAsync(
                     "InvalidTimeout",
                     (_, _) => Task.CompletedTask,
                     timeout: TimeSpan.FromMilliseconds(-2)
                 )
             );
 
-            Assert.That(m_Host.RootScopes, Is.Empty);
-            Assert.That(m_Host.Scopes, Is.Empty);
+            Assert.That(m_Architecture.RootScopes, Is.Empty);
+            Assert.That(m_Architecture.Scopes, Is.Empty);
         }
 
         [UnityTest]
         public IEnumerator AsyncSetup_CanObserveTimeoutCancellation() {
-            var creating = m_Host.CreateRootScopeAsync(
+            var creating = m_Architecture.CreateRootScopeAsync(
                 "Timeout",
                 async (_, token) => await Task.Delay(Timeout.InfiniteTimeSpan, token),
                 timeout: TimeSpan.FromMilliseconds(20)
@@ -337,14 +337,14 @@ namespace ZArch.Tests.Editor {
             yield return WaitForTask(creating);
             Assert.Catch<TaskCanceledException>(() => creating.GetAwaiter().GetResult());
 
-            Assert.That(m_Host.RootScopes, Is.Empty);
-            Assert.That(m_Host.Scopes, Is.Empty);
+            Assert.That(m_Architecture.RootScopes, Is.Empty);
+            Assert.That(m_Architecture.Scopes, Is.Empty);
         }
 
         [UnityTest]
         public IEnumerator AsyncScope_IsNotPublishedUntilActivationCompletes() {
             var service = new BlockingAsyncService();
-            var creating = m_Host.CreateRootScopeAsync(
+            var creating = m_Architecture.CreateRootScopeAsync(
                 "Pending",
                 scope => {
                     scope.Register(service);
@@ -354,23 +354,23 @@ namespace ZArch.Tests.Editor {
 
             yield return WaitForTask(service.Started.Task);
 
-            Assert.That(m_Host.RootScopes, Is.Empty);
-            Assert.That(m_Host.Scopes, Is.Empty);
+            Assert.That(m_Architecture.RootScopes, Is.Empty);
+            Assert.That(m_Architecture.Scopes, Is.Empty);
 
             service.Release.SetResult(true);
             yield return WaitForTask(creating);
             var scope = creating.GetAwaiter().GetResult();
 
             Assert.That(scope.State, Is.EqualTo(EScopeState.Active));
-            Assert.That(m_Host.RootScopes, Is.EqualTo(new[] { scope }));
-            Assert.That(m_Host.Scopes, Is.EqualTo(new[] { scope }));
+            Assert.That(m_Architecture.RootScopes, Is.EqualTo(new[] { scope }));
+            Assert.That(m_Architecture.Scopes, Is.EqualTo(new[] { scope }));
         }
 
         [UnityTest]
         public IEnumerator Shutdown_DuringAsyncInitialization_CannotReactivateDisposedScope() {
             var service = new BlockingAsyncService();
             ArchitectureScope pendingScope = null;
-            var creating = m_Host.CreateRootScopeAsync(
+            var creating = m_Architecture.CreateRootScopeAsync(
                 "Pending",
                 scope => {
                     pendingScope = scope;
@@ -380,11 +380,11 @@ namespace ZArch.Tests.Editor {
             );
 
             yield return WaitForTask(service.Started.Task);
-            m_Host.Shutdown();
+            m_Architecture.Shutdown();
 
             Assert.That(pendingScope.State, Is.EqualTo(EScopeState.Disposed));
-            Assert.That(m_Host.RootScopes, Is.Empty);
-            Assert.That(m_Host.Scopes, Is.Empty);
+            Assert.That(m_Architecture.RootScopes, Is.Empty);
+            Assert.That(m_Architecture.Scopes, Is.Empty);
 
             service.Release.SetResult(true);
 
@@ -395,7 +395,7 @@ namespace ZArch.Tests.Editor {
 
         [UnityTest]
         public IEnumerator DisposingParent_CancelsPendingChildActivation() {
-            var parent = m_Host.CreateRootScope("Parent", _ => { });
+            var parent = m_Architecture.CreateRootScope("Parent", _ => { });
             var service = new BlockingAsyncService();
             ArchitectureScope pendingChild = null;
             var creating = parent.CreateChildAsync(
@@ -409,7 +409,7 @@ namespace ZArch.Tests.Editor {
 
             yield return WaitForTask(service.Started.Task);
             Assert.That(parent.Children, Is.Empty);
-            Assert.That(m_Host.Scopes, Is.EqualTo(new[] { parent }));
+            Assert.That(m_Architecture.Scopes, Is.EqualTo(new[] { parent }));
 
             parent.Dispose();
             service.Release.SetResult(true);
@@ -417,14 +417,14 @@ namespace ZArch.Tests.Editor {
             yield return WaitForTask(creating);
             Assert.Catch<OperationCanceledException>(() => creating.GetAwaiter().GetResult());
             Assert.That(pendingChild.State, Is.EqualTo(EScopeState.Disposed));
-            Assert.That(m_Host.Scopes, Is.Empty);
+            Assert.That(m_Architecture.Scopes, Is.Empty);
         }
 
         [Test]
         public void Shutdown_MakesArchitectureInstanceOneShot() {
-            m_Host.Shutdown();
+            m_Architecture.Shutdown();
 
-            var exception = Assert.Throws<InvalidOperationException>(m_Host.Start);
+            var exception = Assert.Throws<InvalidOperationException>(m_Architecture.Start);
 
             Assert.That(exception.Message, Does.Contain("cannot be restarted"));
         }

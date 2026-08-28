@@ -1,7 +1,7 @@
 using System;
 
 namespace ZArch {
-    public abstract partial class Architecture {
+    public partial class Architecture {
         public void SendEvent<T>() where T : new() {
             EnsureStarted();
             m_EventSystem.Send<T>();

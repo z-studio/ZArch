@@ -8,20 +8,20 @@ using ZArch.GameModules;
 namespace ZArch.Tests.Editor {
     [TestFixture]
     public sealed class GameModuleTests {
-        private ArchitectureHost m_Host;
+        private Architecture m_Architecture;
         private ArchitectureScope m_AppRoot;
         private FakeContentLoader m_ContentLoader;
 
         [SetUp]
         public void SetUp() {
-            m_Host = new ArchitectureHost();
-            m_Host.Start();
-            m_AppRoot = m_Host.CreateRootScope("App", _ => { });
+            m_Architecture = new Architecture();
+            m_Architecture.Start();
+            m_AppRoot = m_Architecture.CreateRootScope("App", _ => { });
             m_ContentLoader = new FakeContentLoader();
         }
 
         [TearDown]
-        public void TearDown() => m_Host.Dispose();
+        public void TearDown() => m_Architecture.Dispose();
 
         [Test]
         public async Task EnterAsync_CreatesChildScope_ConfiguresModuleAndLoadsContent() {
@@ -137,9 +137,9 @@ namespace ZArch.Tests.Editor {
         }
 
         [Test]
-        public void GameLaunchContext_ProvidesTypedArguments() {
+        public void GameEnterContext_ProvidesTypedArguments() {
             var arguments = new ModuleService("args");
-            var context = new GameLaunchContext(arguments);
+            var context = new GameEnterContext(arguments);
 
             Assert.That(context.GetArguments<ModuleService>(), Is.SameAs(arguments));
             Assert.That(context.TryGetArguments<string>(out _), Is.False);
@@ -179,7 +179,7 @@ namespace ZArch.Tests.Editor {
             Assert.That(m_AppRoot.Children, Is.Empty);
         }
 
-        private GameLauncher CreateLauncher(params IGameModule[] modules) =>
+        private GameModuleLauncher CreateLauncher(params IGameModule[] modules) =>
             new(
                 new GameScopeFactory(m_AppRoot),
                 m_ContentLoader,
@@ -187,19 +187,19 @@ namespace ZArch.Tests.Editor {
             );
 
         private sealed class FakeModule : IGameModule {
-            private readonly Action<ArchitectureScope, GameLaunchContext> m_Configure;
+            private readonly Action<ArchitectureScope, GameEnterContext> m_Configure;
 
             public string Id { get; }
 
             public FakeModule(
                 string id,
-                Action<ArchitectureScope, GameLaunchContext> configure = null
+                Action<ArchitectureScope, GameEnterContext> configure = null
             ) {
                 Id = id;
                 m_Configure = configure;
             }
 
-            public void Configure(ArchitectureScope scope, GameLaunchContext context) =>
+            public void Configure(ArchitectureScope scope, GameEnterContext context) =>
                 m_Configure?.Invoke(scope, context);
         }
 
@@ -223,7 +223,7 @@ namespace ZArch.Tests.Editor {
             public async Task<IGameContentHandle> LoadAsync(
                 IGameModule module,
                 ArchitectureScope scope,
-                GameLaunchContext context,
+                GameEnterContext context,
                 CancellationToken cancellationToken
             ) {
                 LoadedScopes.Add(scope);

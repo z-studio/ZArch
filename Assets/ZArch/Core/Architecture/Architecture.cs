@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 
 namespace ZArch {
-    public abstract partial class Architecture : IDisposable {
+    public partial class Architecture : IDisposable {
         private readonly List<ArchitectureScope> m_RootScopes = new();
         private readonly List<ArchitectureScope> m_AllScopes = new();
         private readonly List<ArchitectureScope> m_PendingScopes = new();
@@ -20,7 +20,7 @@ namespace ZArch {
         public IReadOnlyList<ArchitectureScope> Scopes => m_AllScopesView;
         public event Action<ArchitectureScope> ScopeConfiguring;
 
-        protected Architecture() {
+        public Architecture() {
             m_RootScopesView = m_RootScopes.AsReadOnly();
             m_AllScopesView = m_AllScopes.AsReadOnly();
         }

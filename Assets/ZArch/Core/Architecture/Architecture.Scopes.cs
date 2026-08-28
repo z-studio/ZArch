@@ -3,7 +3,7 @@ using System.Threading;
 using System.Threading.Tasks;
 
 namespace ZArch {
-    public abstract partial class Architecture {
+    public partial class Architecture {
         public ArchitectureScope CreateRootScope(string name, Action<ArchitectureScope> setup, object tag = null) {
             EnsureStarted();
 

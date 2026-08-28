@@ -14,7 +14,7 @@ public sealed class BattleModule : IGameModule
 {
     public string Id => "battle";
 
-    public void Configure(ArchitectureScope scope, GameLaunchContext context)
+    public void Configure(ArchitectureScope scope, GameEnterContext context)
     {
         scope.Register<BattleModel>(new BattleModel());
         scope.Register<BattleSystem>(new BattleSystem());
@@ -22,7 +22,7 @@ public sealed class BattleModule : IGameModule
 }
 ```
 
-`GameLaunchContext` 可携带本次进入需要的参数。模块只负责注册其 Scope 内的服务，不负责直接加载场景。
+`GameEnterContext` 可携带本次进入需要的参数。模块只负责注册其 Scope 内的服务，不负责直接加载场景。
 
 ## 2. 创建 Unity 模块资产
 
@@ -43,7 +43,7 @@ public sealed class BattleModuleAsset : UnityGameModuleAsset
 {
     public override void Configure(
         ArchitectureScope scope,
-        GameLaunchContext context)
+        GameEnterContext context)
     {
         scope.Register<BattleModel>(new BattleModel());
         scope.Register<BattleSystem>(new BattleSystem());
@@ -61,22 +61,22 @@ using ZArch.GameModules;
 using ZArch.GameModules.Unity;
 using ZArch.Unity;
 
-public sealed class GameBootstrap : ArchitectureHostBootstrap
+public sealed class GameBootstrap : ArchitectureBootstrap
 {
     [UnityEngine.SerializeField]
     private GameModuleCatalog m_ModuleCatalog;
 
     protected override Architecture CreateArchitecture()
-        => new ArchitectureHost();
+        => new Architecture();
 
     protected override void ConfigureRoot(ArchitectureScope root)
     {
-        var launcher = new GameLauncher(
+        var launcher = new GameModuleLauncher(
             new GameScopeFactory(root),
             new UnityGameContentLoader(),
             m_ModuleCatalog);
 
-        root.Register<IGameLauncher>(launcher);
+        root.Register<IGameModuleLauncher>(launcher);
     }
 }
 ```
@@ -89,9 +89,9 @@ public sealed class GameBootstrap : ArchitectureHostBootstrap
 using System.Threading;
 using ZArch.GameModules;
 
-var launcher = root.Resolve<IGameLauncher>();
+var launcher = root.Resolve<IGameModuleLauncher>();
 
-var context = new GameLaunchContext(12); // Arguments 可放任意业务参数对象
+var context = new GameEnterContext(12); // Arguments 可放任意业务参数对象
 await launcher.EnterAsync("battle", context, cancellationToken);
 
 // 返回大厅或结束玩法
@@ -112,14 +112,14 @@ Launcher 同一时间只允许一个切换操作，也只维护一个 Active 模
 
 ## 5. 场景入口
 
-每个模块场景必须恰好包含一个 `GameSceneEntry`。继承它并在 `OnBindScope` 中绑定场景对象：
+每个模块场景必须恰好包含一个 `GameModuleSceneEntry`。继承它并在 `OnBindScope` 中绑定场景对象：
 
 ```csharp
 using UnityEngine;
 using ZArch;
 using ZArch.GameModules.Unity;
 
-public sealed class BattleSceneEntry : GameSceneEntry
+public sealed class BattleModuleSceneEntry : GameModuleSceneEntry
 {
     [SerializeField] private BattleHud m_Hud;
     [SerializeField] private BattleWorld m_World;

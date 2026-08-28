@@ -7,7 +7,7 @@ ZArch 按“程序集负责依赖边界，目录负责阅读边界”组织。�
 ```text
 Assets/ZArch
 ├── Core/
-│   ├── Architecture/       Host、Scope 创建与 Host Event
+│   ├── Architecture/       Architecture、Scope 创建与架构级事件
 │   ├── Scopes/             Scope 生命周期、注册、解析和事件
 │   ├── Services/           服务注册协议
 │   ├── Events/             通用事件实现
@@ -110,10 +110,10 @@ ArchitectureScope.Debug.cs
 - Scoped、Transient、Alias 与循环 Factory；
 - 初始化顺序、逆序释放与失败回滚；
 - 异步成功、取消、超时以及关闭竞态；
-- Host Event、Scope Event 和订阅异常；
+- Architecture Event、Scope Event 和订阅异常；
 - BindableProperty 比较、立即回调和注销；
 - Scene Scope 的创建与卸载；
-- GameLauncher 进入、退出、重复切换和加载失败回滚。
+- GameModuleLauncher 进入、退出、重复切换和加载失败回滚。
 
 提交前在 Unity Test Runner 运行 `ZArch.Tests.Editor`，并确认 Console 没有意外异常。涉及 Player Runtime 行为时，再补一次目标平台构建验证。
 

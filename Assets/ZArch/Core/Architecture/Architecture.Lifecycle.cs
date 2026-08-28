@@ -1,7 +1,7 @@
 using System;
 
 namespace ZArch {
-    public abstract partial class Architecture {
+    public partial class Architecture {
         public void Start() {
             if (m_IsTerminated) {
                 throw new InvalidOperationException(

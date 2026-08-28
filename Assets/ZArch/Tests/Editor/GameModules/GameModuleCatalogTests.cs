@@ -94,17 +94,17 @@ namespace ZArch.Tests.Editor {
             var module = CreateModule("game-1", "game-1-address", "custom");
             var provider = new FakeSceneProvider("custom");
             var loader = new UnityGameContentLoader(provider);
-            var host = new ArchitectureHost();
-            host.Start();
+            var architecture = new Architecture();
+            architecture.Start();
 
             try {
-                var scope = host.CreateRootScope("Test", _ => { });
+                var scope = architecture.CreateRootScope("Test", _ => { });
 
                 var exception = Assert.ThrowsAsync<InvalidOperationException>(async () =>
                     await loader.LoadAsync(
                         module,
                         scope,
-                        GameLaunchContext.Empty,
+                        GameEnterContext.Empty,
                         CancellationToken.None
                     )
                 );
@@ -113,7 +113,7 @@ namespace ZArch.Tests.Editor {
                 Assert.That(provider.LoadedLocations, Is.EqualTo(new[] { "game-1-address" }));
                 Assert.That(provider.UnloadCount, Is.EqualTo(1));
             } finally {
-                host.Dispose();
+                architecture.Dispose();
             }
         }
 
@@ -122,17 +122,17 @@ namespace ZArch.Tests.Editor {
             var module = CreateModule("game-1", "game-1-address", "custom");
             var provider = new FakeSceneProvider("custom") { FailUnloading = true };
             var loader = new UnityGameContentLoader(provider);
-            var host = new ArchitectureHost();
-            host.Start();
+            var architecture = new Architecture();
+            architecture.Start();
 
             try {
-                var scope = host.CreateRootScope("Test", _ => { });
+                var scope = architecture.CreateRootScope("Test", _ => { });
 
                 var exception = Assert.ThrowsAsync<AggregateException>(async () =>
                     await loader.LoadAsync(
                         module,
                         scope,
-                        GameLaunchContext.Empty,
+                        GameEnterContext.Empty,
                         CancellationToken.None
                     )
                 );
@@ -141,7 +141,7 @@ namespace ZArch.Tests.Editor {
                 Assert.That(exception.InnerExceptions[0].Message, Does.Contain("invalid or unloaded scene"));
                 Assert.That(exception.InnerExceptions[1].Message, Does.Contain("rollback failed"));
             } finally {
-                host.Dispose();
+                architecture.Dispose();
             }
         }
 
@@ -218,6 +218,6 @@ namespace ZArch.Tests.Editor {
     }
 
     public sealed class CatalogTestGameModuleAsset : UnityGameModuleAsset {
-        public override void Configure(ArchitectureScope scope, GameLaunchContext context) { }
+        public override void Configure(ArchitectureScope scope, GameEnterContext context) { }
     }
 }

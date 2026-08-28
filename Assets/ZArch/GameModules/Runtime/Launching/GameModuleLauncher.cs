@@ -5,7 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 
 namespace ZArch.GameModules {
-    public sealed class GameLauncher : IGameLauncher, IDeinitializable {
+    public sealed class GameModuleLauncher : IGameModuleLauncher, IDeinitializable {
         private readonly IGameScopeFactory m_ScopeFactory;
         private readonly IGameContentLoader m_ContentLoader;
         private readonly Dictionary<string, IGameModule> m_Modules = new(StringComparer.Ordinal);
@@ -15,11 +15,11 @@ namespace ZArch.GameModules {
         private bool m_IsShuttingDown;
         private bool m_IsDisposed;
 
-        public GameSession Current { get; private set; }
+        public GameModuleSession Current { get; private set; }
         public bool IsTransitioning { get; private set; }
         public IReadOnlyCollection<IGameModule> Modules { get; }
 
-        public GameLauncher(
+        public GameModuleLauncher(
             IGameScopeFactory scopeFactory,
             IGameContentLoader contentLoader,
             IEnumerable<IGameModule> modules
@@ -57,9 +57,9 @@ namespace ZArch.GameModules {
             return m_Modules.TryGetValue(gameId, out module);
         }
 
-        public async Task<GameSession> EnterAsync(
+        public async Task<GameModuleSession> EnterAsync(
             string gameId,
-            GameLaunchContext context = null,
+            GameEnterContext context = null,
             CancellationToken cancellationToken = default
         ) {
             EnsureUsable();
@@ -75,8 +75,8 @@ namespace ZArch.GameModules {
             }
 
             BeginTransition();
-            context ??= GameLaunchContext.Empty;
-            GameSession entering = null;
+            context ??= GameEnterContext.Empty;
+            GameModuleSession entering = null;
             CancellationTokenSource linkedCts = null;
 
             try {
@@ -90,7 +90,7 @@ namespace ZArch.GameModules {
 
                 var scope = await m_ScopeFactory.CreateAsync(module, context, transitionToken).ConfigureAwait(true);
 
-                entering = new GameSession(module, context, scope);
+                entering = new GameModuleSession(module, context, scope);
 
                 entering.Content = await m_ContentLoader.LoadAsync(module, scope, context, transitionToken)
                                                         .ConfigureAwait(true);
@@ -188,7 +188,7 @@ namespace ZArch.GameModules {
             }
         }
 
-        private async Task<Exception> CleanupAsync(GameSession session) {
+        private async Task<Exception> CleanupAsync(GameModuleSession session) {
             if (session.IsCleanedUp) {
                 return null;
             }
@@ -233,7 +233,7 @@ namespace ZArch.GameModules {
 
         private void EnsureUsable() {
             if (m_IsDisposed || m_IsShuttingDown) {
-                throw new ObjectDisposedException(nameof(GameLauncher));
+                throw new ObjectDisposedException(nameof(GameModuleLauncher));
             }
         }
 

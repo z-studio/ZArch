@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 namespace ZArch.GameModules {
     public interface IGameModule {
         string Id { get; }
-        void Configure(ArchitectureScope scope, GameLaunchContext context);
+        void Configure(ArchitectureScope scope, GameEnterContext context);
     }
 
     public interface IGameContentHandle { }
@@ -15,7 +15,7 @@ namespace ZArch.GameModules {
         Task<IGameContentHandle> LoadAsync(
             IGameModule module,
             ArchitectureScope scope,
-            GameLaunchContext context,
+            GameEnterContext context,
             CancellationToken cancellationToken
         );
 
@@ -25,21 +25,21 @@ namespace ZArch.GameModules {
     public interface IGameScopeFactory {
         Task<ArchitectureScope> CreateAsync(
             IGameModule module,
-            GameLaunchContext context,
+            GameEnterContext context,
             CancellationToken cancellationToken
         );
     }
 
-    public interface IGameLauncher {
-        GameSession Current { get; }
+    public interface IGameModuleLauncher {
+        GameModuleSession Current { get; }
         bool IsTransitioning { get; }
         IReadOnlyCollection<IGameModule> Modules { get; }
 
         bool TryGetModule(string gameId, out IGameModule module);
 
-        Task<GameSession> EnterAsync(
+        Task<GameModuleSession> EnterAsync(
             string gameId,
-            GameLaunchContext context = null,
+            GameEnterContext context = null,
             CancellationToken cancellationToken = default
         );
 
@@ -47,12 +47,12 @@ namespace ZArch.GameModules {
         Task ShutdownAsync();
     }
 
-    public sealed class GameLaunchContext {
-        public static GameLaunchContext Empty { get; } = new();
+    public sealed class GameEnterContext {
+        public static GameEnterContext Empty { get; } = new();
 
         public object Arguments { get; }
 
-        public GameLaunchContext(object arguments = null) {
+        public GameEnterContext(object arguments = null) {
             Arguments = arguments;
         }
 

@@ -41,7 +41,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using ZArch;
 
-using var architecture = new ArchitectureHost();
+using var architecture = new Architecture();
 architecture.Start();
 using var cancellation = new CancellationTokenSource();
 
@@ -117,16 +117,16 @@ using ZArch;
 using ZArch.GameModules;
 using ZArch.Unity;
 
-public sealed class GameBootstrap : ArchitectureHostBootstrap
+public sealed class GameBootstrap : ArchitectureBootstrap
 {
     protected override bool RequiresExplicitShutdown => true;
 
     protected override Architecture CreateArchitecture()
-        => new ArchitectureHost();
+        => new Architecture();
 
     protected override void ConfigureRoot(ArchitectureScope scope) { }
 
-    public async Task ExitGameAsync(IGameLauncher launcher)
+    public async Task ExitGameAsync(IGameModuleLauncher launcher)
     {
         await launcher.ShutdownAsync();
         ShutdownArchitecture();

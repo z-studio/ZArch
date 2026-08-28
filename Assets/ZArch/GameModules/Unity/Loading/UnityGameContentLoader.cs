@@ -42,7 +42,7 @@ namespace ZArch.GameModules.Unity {
         public async Task<IGameContentHandle> LoadAsync(
             IGameModule module,
             ArchitectureScope scope,
-            GameLaunchContext context,
+            GameEnterContext context,
             CancellationToken cancellationToken
         ) {
             if (module is not IUnityGameModule unityModule) {
@@ -143,14 +143,14 @@ namespace ZArch.GameModules.Unity {
             }
         }
 
-        private static GameSceneEntry FindSceneEntry(Scene scene) {
-            GameSceneEntry result = null;
+        private static GameModuleSceneEntry FindSceneEntry(Scene scene) {
+            GameModuleSceneEntry result = null;
 
             foreach (var root in scene.GetRootGameObjects()) {
-                foreach (var entry in root.GetComponentsInChildren<GameSceneEntry>(true)) {
+                foreach (var entry in root.GetComponentsInChildren<GameModuleSceneEntry>(true)) {
                     if (result != null) {
                         throw new InvalidOperationException(
-                            $"Scene '{scene.path}' contains more than one {nameof(GameSceneEntry)}."
+                            $"Scene '{scene.path}' contains more than one {nameof(GameModuleSceneEntry)}."
                         );
                     }
 
@@ -160,7 +160,7 @@ namespace ZArch.GameModules.Unity {
 
             return result
                    ?? throw new InvalidOperationException(
-                       $"Scene '{scene.path}' does not contain a {nameof(GameSceneEntry)}."
+                       $"Scene '{scene.path}' does not contain a {nameof(GameModuleSceneEntry)}."
                    );
         }
     }

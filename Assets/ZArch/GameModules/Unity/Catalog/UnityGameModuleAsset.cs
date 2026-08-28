@@ -3,7 +3,7 @@ using UnityEngine;
 namespace ZArch.GameModules.Unity {
     public abstract class UnityGameModuleAsset : ScriptableObject, IUnityGameModule {
         [SerializeField]
-        [Tooltip("Unique, case-sensitive module ID used by GameLauncher.EnterAsync.")]
+        [Tooltip("Unique, case-sensitive module ID used by GameModuleLauncher.EnterAsync.")]
         private string m_Id;
 
         [SerializeField]
@@ -20,7 +20,7 @@ namespace ZArch.GameModules.Unity {
 
         public abstract void Configure(
             ArchitectureScope scope,
-            GameLaunchContext context
+            GameEnterContext context
         );
     }
 }

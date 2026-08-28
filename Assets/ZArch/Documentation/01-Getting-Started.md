@@ -58,8 +58,8 @@ public sealed class IncreaseCountCommand : AbstractCommand {
 using ZArch;
 using ZArch.Unity;
 
-public sealed class GameBootstrap : ArchitectureHostBootstrap {
-    protected override Architecture CreateArchitecture() => new ArchitectureHost();
+public sealed class GameBootstrap : ArchitectureBootstrap {
+    protected override Architecture CreateArchitecture() => new Architecture();
 
     protected override void ConfigureRoot(ArchitectureScope scope) {
         scope.Register<ICounterModel>(new CounterModel());
@@ -116,7 +116,7 @@ public sealed class CounterController : ArchitectureController {
 
 ```text
 GameBootstrap.Awake
-→ 创建 Host 和 Root Scope
+→ 创建 Architecture 和 Root Scope
 → CounterModel.OnInit
 
 CounterController.Start
@@ -163,4 +163,4 @@ subscription.UnregisterWhenGameObjectDestroyed(gameObject);
 
 ## 下一步
 
-继续阅读 [Host、Scope 与服务](02-Core.md)，理解 Root Scope、Child Scope 和服务生命周期。
+继续阅读 [Architecture、Scope 与服务](02-Core.md)，理解 Root Scope、Child Scope 和服务生命周期。

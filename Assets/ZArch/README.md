@@ -1,6 +1,6 @@
 # ZArch
 
-ZArch 是一个面向 Unity 的分层架构框架。它保留 Model、System、Utility、Command、Query、Event 和 BindableProperty 这一套清晰的业务组织方式，并使用 Host 与层级 Scope 管理服务、生命周期、场景和独立游戏模块。
+ZArch 是一个面向 Unity 的分层架构框架。它保留 Model、System、Utility、Command、Query、Event 和 BindableProperty 这一套清晰的业务组织方式，并使用 Architecture 与层级 Scope 管理服务、生命周期、场景和独立游戏模块。
 
 框架没有静态全局架构实例。每个 `Architecture` 都是一个相互隔离的运行环境，可以拥有一棵或多棵 Scope 树。
 
@@ -17,7 +17,7 @@ ZArch 是一个面向 Unity 的分层架构框架。它保留 Model、System、U
 ## 核心模型
 
 ```text
-Architecture Host
+Architecture
 └── Root Scope
     ├── Model
     ├── System
@@ -67,8 +67,8 @@ public sealed class IncreaseCountCommand : AbstractCommand {
 using ZArch;
 using ZArch.Unity;
 
-public sealed class GameBootstrap : ArchitectureHostBootstrap {
-    protected override Architecture CreateArchitecture() => new ArchitectureHost();
+public sealed class GameBootstrap : ArchitectureBootstrap {
+    protected override Architecture CreateArchitecture() => new Architecture();
 
     protected override void ConfigureRoot(ArchitectureScope scope) {
         scope.Register<ICounterModel>(new CounterModel());
@@ -76,7 +76,7 @@ public sealed class GameBootstrap : ArchitectureHostBootstrap {
 }
 ```
 
-把 `GameBootstrap` 挂到启动场景的 GameObject。它会创建 Host、启动 Root Scope，并在销毁时关闭架构。
+把 `GameBootstrap` 挂到启动场景的 GameObject。它会创建 Architecture、启动 Root Scope，并在销毁时关闭架构。
 
 ### 4. 绑定 Controller
 
@@ -124,10 +124,10 @@ Patterns 和 Unity 集成都不是强制依赖。纯 C# 代码可以只使用 `Z
 ```csharp
 using ZArch;
 
-using var host = new ArchitectureHost();
-host.Start();
+using var architecture = new Architecture();
+architecture.Start();
 
-var app = host.CreateRootScope("App", scope => {
+var app = architecture.CreateRootScope("App", scope => {
     scope.Register<IClock>(new SystemClock());
     scope.RegisterFactory<IRepository>(resolver =>
         new Repository(resolver.Resolve<IClock>()));
@@ -143,7 +143,7 @@ ZArch.Core ← ZArch.Patterns ← ZArch.Unity ← ZArch.Unity.Editor
      └─────← ZArch.GameModules ← ZArch.GameModules.Unity
 ```
 
-- `ZArch.Core`：Host、Scope、服务、生命周期和事件，不依赖 Unity。
+- `ZArch.Core`：Architecture、Scope、服务、生命周期和事件，不依赖 Unity。
 - `ZArch.Patterns`：Model/System、Command/Query、BindableProperty。
 - `ZArch.Unity`：Bootstrap、Controller、Scene Scope 和 Unity 自动注销。
 - `ZArch.Unity.Editor`：运行时架构调试窗口。
@@ -159,7 +159,7 @@ Core 和 Patterns 均启用 `noEngineReferences`。
 ### 基础路线
 
 1. [快速开始](Documentation/01-Getting-Started.md)：从空场景完成 Counter。
-2. [Host、Scope 与服务](Documentation/02-Core.md)：理解注册、解析、生命周期和事件。
+2. [Architecture、Scope 与服务](Documentation/02-Core.md)：理解注册、解析、生命周期和事件。
 3. [Patterns](Documentation/03-Patterns.md)：使用 Model/System、Command/Query 和 BindableProperty。
 4. [Unity 集成](Documentation/04-Unity.md)：正确绑定 MonoBehaviour、场景和订阅生命周期。
 
@@ -184,7 +184,7 @@ Core 和 Patterns 均启用 `noEngineReferences`。
 | Utility | 封装存储、网络、SDK 等基础设施 | Scope 或外部 |
 | Command | 表达一次操作或状态变更 | 调用方，执行后丢弃 |
 | Query | 表达一次读取 | 调用方，执行后丢弃 |
-| Event | 通知已经发生的事实 | Host 或 Scope 的事件系统 |
+| Event | 通知已经发生的事实 | Architecture 或 Scope 的事件系统 |
 | BindableProperty | 保存值并通知变化 | 通常属于 Model |
 | `IUnregister` | 表示一条可取消订阅 | 订阅者 |
 
@@ -200,7 +200,7 @@ Core 和 Patterns 均启用 `noEngineReferences`。
 
 ## 重要约束
 
-- ZArch 采用串行执行模型。Unity 项目应在主线程访问 Host 和 Scope。
+- ZArch 采用串行执行模型。Unity 项目应在主线程访问 Architecture 和 Scope。
 - `Architecture` 调用 `Shutdown()` 后不能重新启动；需要重新创建实例。
 - Scope 激活后注册表被冻结，运行时变化通过创建或销毁子 Scope 表达。
 - 创建 Scope 的一方必须明确负责其释放；父 Scope 会自动释放所有子 Scope。

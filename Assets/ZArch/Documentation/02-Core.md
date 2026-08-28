@@ -1,4 +1,4 @@
-# 02 Host、Scope 与服务
+# 02 Architecture、Scope 与服务
 
 Core 是 ZArch 的运行时底座，不依赖 Unity。它负责隔离运行环境、组织服务、执行生命周期和传播事件。
 
@@ -7,25 +7,25 @@ Core 是 ZArch 的运行时底座，不依赖 Unity。它负责隔离运行环�
 `Architecture` 表示一个独立应用或世界：
 
 ```csharp
-using var host = new ArchitectureHost();
-host.Start();
+using var architecture = new Architecture();
+architecture.Start();
 
-var root = host.CreateRootScope("App", _ => { });
+var root = architecture.CreateRootScope("App", _ => { });
 ```
 
-一个进程可以创建多个 Host。它们不共享服务、Scope 或事件。
+一个进程可以创建多个 Architecture。它们不共享服务、Scope 或事件。
 
 `Shutdown()` 后实例不能再次 `Start()`：
 
 ```csharp
-host.Shutdown();
+architecture.Shutdown();
 
 // 需要重新运行时创建新实例。
-using var nextHost = new ArchitectureHost();
-nextHost.Start();
+using var nextArchitecture = new Architecture();
+nextArchitecture.Start();
 ```
 
-需要 Host 自身启动逻辑时继承 `Architecture`：
+需要自定义架构级启动逻辑时继承 `Architecture`：
 
 ```csharp
 public sealed class GameArchitecture : Architecture {
@@ -49,7 +49,7 @@ App
 ```
 
 ```csharp
-var app = host.CreateRootScope("App", scope => {
+var app = architecture.CreateRootScope("App", scope => {
     scope.Register<IConfig>(new AppConfig());
 });
 
@@ -159,7 +159,7 @@ ZArch 使用精确注册键，不自动映射实现类型、基类或其他接�
 Scope setup 期间只能注册，不能解析：
 
 ```csharp
-host.CreateRootScope("App", scope => {
+architecture.CreateRootScope("App", scope => {
     scope.Register<IStorage>(new LocalStorage());
     // 此时不要 scope.Resolve<IStorage>()。
 });
@@ -195,15 +195,15 @@ scope.Register(gameplay, initializationOrder: 100);
 4. 按拥有顺序反向 `Dispose`；
 5. 清理注册表并脱离父 Scope。
 
-初始化失败会回滚已经初始化和拥有的对象，失败 Scope 不会挂到 Host 树中。
+初始化失败会回滚已经初始化和拥有的对象，失败 Scope 不会挂到 Architecture 树中。
 
-## 6. Host Event 与 Scope Event
+## 6. Architecture Event 与 Scope Event
 
-Host Event 在单个 Architecture 内广播：
+Architecture Event 在单个 Architecture 内广播：
 
 ```csharp
-var unregister = host.RegisterEvent<PlayerLoggedIn>(OnLoggedIn);
-host.SendEvent(new PlayerLoggedIn());
+var unregister = architecture.RegisterEvent<PlayerLoggedIn>(OnLoggedIn);
+architecture.SendEvent(new PlayerLoggedIn());
 unregister.Unregister();
 ```
 
@@ -220,7 +220,7 @@ scope.Publish(new DamageEvent());
 scope.Publish(damage, EEventPropagation.Parents);
 ```
 
-Scope Event 不会自动进入 Host Event。事件处理器发生异常时，ZArch 会继续调用其余处理器，最后向发送方抛出 `AggregateException`。
+Scope Event 不会自动进入 Architecture Event。事件处理器发生异常时，ZArch 会继续调用其余处理器，最后向发送方抛出 `AggregateException`。
 
 ## 7. Scope 状态
 

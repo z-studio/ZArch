@@ -12,7 +12,7 @@ namespace ZArch.GameModules {
 
         public Task<ArchitectureScope> CreateAsync(
             IGameModule module,
-            GameLaunchContext context,
+            GameEnterContext context,
             CancellationToken cancellationToken
         ) {
             if (module == null) {
@@ -23,7 +23,7 @@ namespace ZArch.GameModules {
                 throw new ArgumentException("Game module ID is empty.", nameof(module));
             }
 
-            context ??= GameLaunchContext.Empty;
+            context ??= GameEnterContext.Empty;
 
             return m_ParentScope.CreateChildAsync(
                 $"Game:{module.Id}",

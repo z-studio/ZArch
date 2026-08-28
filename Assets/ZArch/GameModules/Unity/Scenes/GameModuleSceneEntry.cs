@@ -2,7 +2,7 @@ using System;
 using UnityEngine;
 
 namespace ZArch.GameModules.Unity {
-    public abstract class GameSceneEntry : MonoBehaviour {
+    public abstract class GameModuleSceneEntry : MonoBehaviour {
         public ArchitectureScope Scope { get; private set; }
 
         public void BindScope(ArchitectureScope scope) {
