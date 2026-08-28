@@ -1,336 +1,231 @@
 # ZArch
 
-> 面向 Unity 与 .NET 的作用域应用架构框架。
+ZArch 是一个面向 Unity 的分层架构框架。它保留 Model、System、Utility、Command、Query、Event 和 BindableProperty 这一套清晰的业务组织方式，并使用 Host 与层级 Scope 管理服务、生命周期、场景和独立游戏模块。
 
-ZArch 以相互隔离的 **Host** 和层级化的 **Scope Tree** 为核心，用于组织应用的依赖、生命周期与事件。Core 不依赖 Unity，也不维护静态默认实例；每个 Host 都拥有独立的 Scope、服务和事件，因此可以在同一进程内安全地运行游戏主世界、预览环境、测试环境或多个子应用。
+框架没有静态全局架构实例。每个 `Architecture` 都是一个相互隔离的运行环境，可以拥有一棵或多棵 Scope 树。
 
-## 学习与文档
+## 适合解决什么问题
 
-第一次接触架构、依赖注入或生命周期管理时，请从 [ZArch 完整学习指南](Documentation/README.md) 开始，不需要预先理解这些概念。
+- 用 Model 保存游戏状态，用 System 承载可复用规则。
+- 用 Command 表达一次状态变更，用 Query 表达一次读取。
+- 用 Event 或 BindableProperty 从逻辑层通知表现层。
+- 让场景、战斗、关卡、预览环境拥有明确的服务作用域。
+- 自动初始化、反初始化和释放由 Scope 拥有的对象。
+- 在一个 App 中安全切换多个独立游戏模块。
+- 在 Unity 对象销毁、禁用或场景卸载时自动注销订阅。
 
-- [基础篇：从零完成第一个功能](Documentation/01-Beginner.md)
-- [中级篇：Scope、生命周期、事件与服务容器](Documentation/02-Intermediate.md)
-- [高级篇：异步、多 Host 与架构扩展](Documentation/03-Advanced.md)
-- [Unity 与第三方 SDK 实战](Documentation/04-Unity-and-SDK.md)
-- [常用配方与 API 选择](Documentation/05-Cookbook.md)
-- [故障排查与生产检查表](Documentation/06-Troubleshooting-and-Production.md)
-- [大厅与多游戏模块](Documentation/07-Multi-Game-Modules.md)
-- [源码结构与维护指南](Documentation/08-Codebase-Guide.md)
-
-## 分层
+## 核心模型
 
 ```text
-Assets/ZArch
-├── Core/                          ZArch.Core：不依赖 Unity 的运行时底座
-│   ├── Architecture/              Host、Scope 创建、Host 事件和生命周期
-│   ├── Scopes/                    Scope 树、注册、解析和局部事件
-│   ├── Services/                  服务契约、注册描述和调试信息
-│   ├── Events/                    EasyEvent、TypeEventSystem、OrEvent
-│   └── Lifecycle/                 初始化契约与注销工具
-├── Patterns/                      ZArch.Patterns：可选领域组织模式
-│   ├── Binding/                   BindableProperty 及其契约
-│   ├── ModelSystem/               Model、System、Controller 与能力规则
-│   └── Operations/                Command、Query 与 Scope 执行扩展
-├── Unity/                         Unity 运行时和编辑器适配
-│   ├── Runtime/                   Hosting、Scopes、Binding、Lifecycle、Debugging
-│   └── Editor/Debugging/          多 Host 调试窗口
-├── GameModules/                   可选的多游戏会话扩展
-│   ├── Runtime/                   Contracts、Launching、Sessions
-│   └── Unity/                     Catalog、Loading、Scenes
-├── Documentation/                 教程、配方和维护指南
-└── Tests/Editor/                  按 Core、GameModules 镜像源码组织的测试
+Architecture Host
+└── Root Scope
+    ├── Model
+    ├── System
+    ├── Utility
+    └── Child Scope
+        ├── 覆盖父级服务
+        ├── Command / Query
+        ├── Scope Event
+        └── 随 Scope 一起结束的资源
 ```
 
-依赖方向固定为：
+Model、System 等能力接口用于表达分层权限：例如 Model 可以访问 Utility，System 可以访问 Model，Controller 可以发送 Command。它们是编译期规则，不要求业务代码手动管理依赖容器。
+
+## Unity 快速开始
+
+### 1. 定义 Model
+
+```csharp
+using ZArch;
+
+public interface ICounterModel : IModel {
+    BindableProperty<int> Count { get; }
+}
+
+public sealed class CounterModel : AbstractModel, ICounterModel {
+    public BindableProperty<int> Count { get; } = new(0);
+
+    protected override void OnInit() { }
+}
+```
+
+### 2. 定义 Command
+
+```csharp
+using ZArch;
+
+public sealed class IncreaseCountCommand : AbstractCommand {
+    protected override void OnExecute() {
+        this.GetModel<ICounterModel>().Count.Value++;
+    }
+}
+```
+
+### 3. 创建 Bootstrap
+
+```csharp
+using ZArch;
+using ZArch.Unity;
+
+public sealed class GameBootstrap : ArchitectureHostBootstrap {
+    protected override Architecture CreateArchitecture() => new ArchitectureHost();
+
+    protected override void ConfigureRoot(ArchitectureScope scope) {
+        scope.Register<ICounterModel>(new CounterModel());
+    }
+}
+```
+
+把 `GameBootstrap` 挂到启动场景的 GameObject。它会创建 Host、启动 Root Scope，并在销毁时关闭架构。
+
+### 4. 绑定 Controller
+
+```csharp
+using UnityEngine;
+using UnityEngine.UI;
+using ZArch;
+using ZArch.Unity;
+
+public sealed class CounterController : ArchitectureController {
+    [SerializeField] private GameBootstrap m_Bootstrap;
+    [SerializeField] private Button m_Button;
+    [SerializeField] private Text m_Text;
+
+    private void Start() {
+        BindScope(m_Bootstrap.RootScope);
+        m_Button.onClick.AddListener(OnClicked);
+
+        this.GetModel<ICounterModel>()
+            .Count
+            .RegisterWithInitValue(count => m_Text.text = count.ToString())
+            .UnregisterWhenGameObjectDestroyed(gameObject);
+    }
+
+    private void OnClicked() {
+        this.SendCommand(new IncreaseCountCommand());
+    }
+}
+```
+
+这个例子的运行路径只有：
+
+```text
+Bootstrap 注册 Model
+→ Controller 绑定 Scope
+→ Controller 发送 Command
+→ Command 修改 Model
+→ BindableProperty 刷新 UI
+```
+
+## 只使用 Core
+
+Patterns 和 Unity 集成都不是强制依赖。纯 C# 代码可以只使用 `ZArch.Core`：
+
+```csharp
+using ZArch;
+
+using var host = new ArchitectureHost();
+host.Start();
+
+var app = host.CreateRootScope("App", scope => {
+    scope.Register<IClock>(new SystemClock());
+    scope.RegisterFactory<IRepository>(resolver =>
+        new Repository(resolver.Resolve<IClock>()));
+});
+
+var repository = app.Resolve<IRepository>();
+```
+
+## 程序集
 
 ```text
 ZArch.Core ← ZArch.Patterns ← ZArch.Unity ← ZArch.Unity.Editor
      └─────← ZArch.GameModules ← ZArch.GameModules.Unity
 ```
 
-`ZArch.Core` 和 `ZArch.Patterns` 均启用了 `noEngineReferences`，可以脱离 Unity 使用。Patterns 是可选策略层；应用也可以只引用 Core 并建立自己的领域模式。
+- `ZArch.Core`：Host、Scope、服务、生命周期和事件，不依赖 Unity。
+- `ZArch.Patterns`：Model/System、Command/Query、BindableProperty。
+- `ZArch.Unity`：Bootstrap、Controller、Scene Scope 和 Unity 自动注销。
+- `ZArch.Unity.Editor`：运行时架构调试窗口。
+- `ZArch.GameModules`：可选的游戏会话、加载和切换协议。
+- `ZArch.GameModules.Unity`：可选的 Catalog 与 Additive Scene 适配。
 
-`ZArch.GameModules` 是可选的多游戏会话层，不依赖 Unity；`ZArch.GameModules.Unity` 使用 ScriptableObject Catalog 注册独立游戏模块，以 Additive Scene 加载游戏内容，并通过 `GameSceneEntry` 将场景 Controller 显式绑定到当前游戏 Scope。完整用法见[多游戏模块指南](Documentation/07-Multi-Game-Modules.md)。
+Core 和 Patterns 均启用 `noEngineReferences`。
 
-目录只负责源码导航，程序集负责依赖隔离。功能子目录不会额外创建 asmdef，所有公开类型仍保留原有 namespace 和 API。参与框架维护时请先阅读[源码结构与维护指南](Documentation/08-Codebase-Guide.md)。
+## 教程与学习路线
 
-## 设计原则
+第一次使用建议按基础路线阅读，遇到实际需求时再进入进阶或可选扩展。
 
-- 没有静态 `Arch`、默认 Host 或隐式全局 Scope。
-- Scope 可拥有任意名称、任意深度和多个根节点，不内置 App/Mode/Scene 层级。
-- 依赖从请求 Scope 开始向 Parent 查找，子 Scope 可以覆盖父级注册。
-- Scope 激活后注册表被冻结，运行期变化通过创建或销毁子 Scope 表达。
-- 初始化失败会回滚 Scope；销毁按子 Scope、已初始化服务、Owned 对象的反向顺序进行。
-- Unity 只是适配层，不决定 Core 的生命周期或组织方式。
+### 基础路线
 
-## 快速开始
+1. [快速开始](Documentation/01-Getting-Started.md)：从空场景完成 Counter。
+2. [Host、Scope 与服务](Documentation/02-Core.md)：理解注册、解析、生命周期和事件。
+3. [Patterns](Documentation/03-Patterns.md)：使用 Model/System、Command/Query 和 BindableProperty。
+4. [Unity 集成](Documentation/04-Unity.md)：正确绑定 MonoBehaviour、场景和订阅生命周期。
 
-```csharp
-using ZArch;
+### 进阶路线
 
-var host = new ArchitectureHost();
-host.Start();
+5. [异步与生命周期](Documentation/05-Async-Lifecycle.md)：异步初始化、取消、超时、回滚和安全关闭。
+6. [API 速查](Documentation/07-API-Reference.md)：按需求选择 API，并定位常见错误。
 
-var root = host.CreateRootScope("Game", scope => {
-    scope.Register<IConfig>(new GameConfig());
-    scope.RegisterFactory<IRepository>(resolver =>
-        new Repository(resolver.Resolve<IConfig>()));
-});
+### 可选扩展
 
-var battle = root.CreateChild("Battle", scope => {
-    scope.Register<IRuleSet>(new BattleRuleSet());
-});
+- [多游戏模块](Documentation/06-Game-Modules.md)：一个大厅切换多个独立游戏或玩法。
+- [源码维护](Documentation/08-Maintenance.md)：修改 ZArch 本身时使用。
 
-var repository = battle.Resolve<IRepository>(); // 当前 Scope 没有时回退到 Parent
+### 概念索引
 
-host.Shutdown(); // 也可以 host.Dispose()
-```
+| 概念 | 负责什么 | 谁创建或拥有 |
+|---|---|---|
+| `Architecture` | 隔离一个完整运行环境 | Bootstrap 或应用入口 |
+| `ArchitectureScope` | 注册服务、限定生命周期、组织父子关系 | Architecture 或父 Scope |
+| Model | 保存状态和数据操作 | Scope |
+| System | 实现跨界面共享的业务规则 | Scope |
+| Utility | 封装存储、网络、SDK 等基础设施 | Scope 或外部 |
+| Command | 表达一次操作或状态变更 | 调用方，执行后丢弃 |
+| Query | 表达一次读取 | 调用方，执行后丢弃 |
+| Event | 通知已经发生的事实 | Host 或 Scope 的事件系统 |
+| BindableProperty | 保存值并通知变化 | 通常属于 Model |
+| `IUnregister` | 表示一条可取消订阅 | 订阅者 |
 
-`Architecture` 是一次性实例：`Shutdown()` 后不能再次 `Start()`；需要重新启动应用环境时创建新的 Architecture。异步创建中的 Scope 只有在全部初始化成功后才会进入 `RootScopes`、`Scopes` 或 Parent 的 `Children`。Dispose/Shutdown 会取消仍在进行的初始化，并且已销毁 Scope 不会被异步续体重新激活。
+### 最小选择规则
 
-`ArchitectureHost` 是可以直接实例化的通用 Host。需要 Host 级启动逻辑时继承 `Architecture`：
+- 多个对象共享的数据放入 Model。
+- 多个 Controller 共用的规则放入 System。
+- 外部 SDK、文件和网络封装为 Utility 或普通服务。
+- 修改状态可直接调用 System；需要日志、回放或排队时使用 Command。
+- 组合读取使用 Query，简单属性读取不必包装。
+- 一次性事实使用 Event，持续状态展示使用 BindableProperty。
+- 生命周期与场景一致时创建 Child Scope，并在场景或流程结束时 Dispose。
 
-```csharp
-public sealed class GameArchitecture : Architecture {
-    protected override void OnStart() {
-        // 这里只处理 Host 自身启动；服务在 Scope setup 中注册。
-    }
+## 重要约束
 
-    protected override void OnShutdown() {
-        // 释放 OnStart 创建的 Host 级资源；Scope 此时已经完成销毁。
-    }
-}
-```
+- ZArch 采用串行执行模型。Unity 项目应在主线程访问 Host 和 Scope。
+- `Architecture` 调用 `Shutdown()` 后不能重新启动；需要重新创建实例。
+- Scope 激活后注册表被冻结，运行时变化通过创建或销毁子 Scope 表达。
+- 创建 Scope 的一方必须明确负责其释放；父 Scope 会自动释放所有子 Scope。
+- 同步 Scope 不能包含 `IAsyncInitializable` 服务。
+- 注册事件后必须保存 `IUnregister`，或使用 Unity 自动注销扩展。
+- ZArch 不提供内部锁，也不承诺并发线程安全；后台任务完成后应先回到所属同步上下文。
 
-一个进程可以创建多个 `Architecture`，它们互不共享注册、Scope 或事件。
-
-## 执行模型
-
-ZArch Core 采用串行执行模型，不提供内部锁，也不承诺并发线程安全。`Start`、Scope 创建/解析/销毁、服务注册和事件收发必须由应用在同一个逻辑线程执行；Unity 项目应统一在主线程调用。后台任务完成后，应先切回所属执行上下文再访问 Architecture 或 Scope。
-
-异步建 Scope API 会保留当前同步上下文。带 timeout 或外部取消需求时使用接收 `CancellationToken` 的双参数 setup 重载；取消是协作式的，setup 和 `IAsyncInitializable` 都必须观察 token。单参数异步 setup 只适合无需取消的配置工作，因此不提供 timeout 参数。
-
-## Scope 树与解析
-
-```text
-Game
-├── Lobby
-└── Battle
-    ├── Gameplay
-    ├── UI
-    └── Level-01
-```
-
-```csharp
-var root = host.CreateRootScope("Game", scope => {
-    scope.Register<IConfig>(defaultConfig);
-});
-
-var battle = root.CreateChild("Battle", scope => {
-    scope.Register<IConfig>(battleConfig);
-});
-
-root.Resolve<IConfig>();    // defaultConfig
-battle.Resolve<IConfig>();  // battleConfig
-```
-
-必需依赖使用 `Resolve<T>()`；可选依赖使用 `TryResolve<T>()`。框架按注册键精确解析，不自动映射实现类、基类或其他接口。
-
-父 Scope Dispose 时会先按反向创建顺序 Dispose 所有子 Scope。Scope 状态为：
+## 源码目录
 
 ```text
-Created → Configuring → Initializing → Active → Disposing → Disposed
-                                ↓
-                              Faulted
+Assets/ZArch
+├── Core/
+│   ├── Architecture/
+│   ├── Scopes/
+│   ├── Services/
+│   ├── Events/
+│   └── Lifecycle/
+├── Patterns/
+│   ├── Binding/
+│   ├── ModelSystem/
+│   └── Operations/
+├── Unity/
+├── GameModules/
+├── Tests/
+└── Documentation/
 ```
 
-## 服务注册
-
-```csharp
-scope.Register<IStorage>(new LocalStorage());
-scope.Register<IStorage, LocalStorage>();
-
-scope.RegisterFactory<IInventory>(resolver =>
-    new Inventory(resolver.Resolve<IStorage>()));
-```
-
-实现类型注册需要公开无参构造函数；有构造参数时使用 Factory。Scoped Factory 每个 Scope 只创建一次，并在激活阶段物化；循环依赖会被检测并抛出异常。
-
-Transient Factory 每次解析创建一个对象：
-
-```csharp
-scope.RegisterFactory<IEnemy>(
-    _ => new Enemy(),
-    EServiceLifetime.Transient,
-    owned: false
-);
-```
-
-为保证确定性，Owned Transient 不能实现 ZArch 生命周期接口。有生命周期的服务应使用 Scoped；外部管理的临时对象应使用 `owned: false`。
-
-Alias 让多个注册键指向同一个实例：
-
-```csharp
-scope.Register<PlayerModel, PlayerModel>();
-scope.RegisterAlias<IPlayerModel, PlayerModel>();
-```
-
-默认 `owned: true`。Scope 会管理 Owned 服务的生命周期，并在结束时 Dispose 实现 `IDisposable` 的对象。
-
-## 生命周期
-
-Core 提供三个正交接口：
-
-```csharp
-public interface IInitializable {
-    void Initialize();
-}
-
-public interface IAsyncInitializable {
-    Task InitializeAsync(CancellationToken cancellationToken);
-}
-
-public interface IDeinitializable {
-    void Deinitialize();
-}
-```
-
-服务默认按注册顺序初始化，也可以显式指定顺序：
-
-```csharp
-scope.Register(config, initializationOrder: -100);
-scope.Register(repository, initializationOrder: 0);
-scope.Register(gameplay, initializationOrder: 100);
-```
-
-相同 order 按注册顺序执行，反初始化按实际初始化顺序逆序执行。如果初始化中途失败，已经完成初始化的服务会被反初始化，整个 Scope 从 Host 中移除。
-
-同步 Scope 不接受异步初始化服务。异步服务使用异步建 Scope API：
-
-```csharp
-var online = await root.CreateChildAsync(
-    "Online",
-    (scope, token) => {
-        scope.Register<IAccountService>(new AccountService());
-        return Task.CompletedTask;
-    },
-    timeout: TimeSpan.FromSeconds(10),
-    cancellationToken: cancellationToken
-);
-```
-
-`timeout` 通过 `CancellationToken` 协作取消 setup 和异步服务初始化；异步实现必须观察传入的 token。无需取消能力时可以继续使用单参数 setup 重载。
-
-## 事件
-
-Architecture 事件属于单个 Host：
-
-```csharp
-IUnregister unregister = host.RegisterEvent<PlayerLoggedIn>(OnPlayerLoggedIn);
-host.SendEvent(new PlayerLoggedIn());
-unregister.Unregister();
-```
-
-Scope 还拥有局部事件：
-
-```csharp
-scope.RegisterEvent<DamageEvent>(OnDamage);
-scope.Publish(damage);                           // 当前 Scope
-scope.Publish(damage, EEventPropagation.Parents); // 当前 Scope 到根
-```
-
-`Publish` 只用于 Scope 事件；发送到当前 Host 使用 `scope.Architecture.SendEvent(message)`。Patterns 使用 `RegisterArchitectureEvent`/`SendArchitectureEvent` 与 `RegisterScopeEvent`/`PublishScopeEvent` 明确区分两级事件。框架没有跨 Host 的静态全局事件总线。
-
-事件会调用本次发送开始时的全部订阅者。某个订阅者抛异常不会阻止后续订阅者或 Parent Scope；发送结束后，所有处理器异常通过 `AggregateException` 一次性抛给发送方。
-
-## 可选 Patterns 层
-
-`ZArch.Patterns` 提供 Model/System/Controller、Command/Query 和 BindableProperty。它们都通过所属 Scope 工作，不访问默认 Host。
-
-```csharp
-var gameplay = root.CreateChild("Gameplay", scope => {
-    scope.Register<IPlayerModel>(new PlayerModel());
-    scope.Register<ICombatSystem>(new CombatSystem());
-});
-```
-
-Model/System 使用统一的 `Register`，框架不内置 `RegisterModel`、`RegisterSystem` 或固定初始化优先级。依赖方应排在依赖项之后注册，或通过 `initializationOrder` 明确顺序。
-
-```csharp
-public sealed class AttackCommand : AbstractCommand {
-    protected override void OnExecute() {
-        this.GetSystem<ICombatSystem>().Attack();
-    }
-}
-
-gameplay.SendCommand(new AttackCommand());
-```
-
-Command 与 Query 是一次性操作对象，执行时由调用 Scope 注入上下文。
-
-## Unity 集成
-
-继承 `ArchitectureHostBootstrap` 可以让一个 GameObject 显式拥有一个 Host：
-
-```csharp
-public sealed class GameBootstrap : ArchitectureHostBootstrap {
-    protected override Architecture CreateArchitecture() => new GameArchitecture();
-
-    protected override void ConfigureRoot(ArchitectureScope scope) {
-        scope.Register<IConfig>(new GameConfig());
-    }
-}
-```
-
-`ArchitectureController` 不会寻找全局 Scope，必须由组合根显式绑定：
-
-```csharp
-controller.BindScope(bootstrap.RootScope);
-```
-
-Scene 生命周期是可选适配策略。每个 Host 创建自己的 `SceneScopeBinder`，因此多个 Host 可以使用不同的 Scene 绑定：
-
-```csharp
-var binder = new SceneScopeBinder(bootstrap.Architecture);
-binder.Bind("Battle", scope => {
-    scope.Register<IBattleSession>(new BattleSession());
-}, _ => bootstrap.RootScope);
-binder.Enable();
-
-// Host 结束前
-binder.Dispose();
-```
-
-同名 Additive Scene 会根据 scene handle 创建独立 Scope。可以按 Scene 名称或完整 path 绑定；卸载 Scene 时对应 Scope 自动销毁。
-
-Scene 相关的事件注销会记录具体 Scene handle，不会再因其他 Additive Scene 卸载而误注销：
-
-```csharp
-subscription.UnregisterWhenCurrentSceneUnloaded();          // 注册调用时的 Active Scene
-subscription.UnregisterWhenSceneUnloaded(targetScene);      // 显式 Scene
-subscription.UnregisterWhenGameObjectSceneUnloaded(gameObject); // GameObject 所属 Scene
-```
-
-`SceneScopeBinder` 应先配置 Bind 再 Enable；启用后新增 Bind 也会立即扫描当前已加载 Scene。Binder Dispose 后不可再次启用或修改绑定。
-
-Binder 创建的 Scope 使用 Unity 层的 `SceneScopeTag` 保存场景名称与路径；Core 的 `ArchitectureScope` 只保留通用 `Tag`，不感知 Unity Scene。
-
-由 `GameLauncher` 管理的 GameModule Scene 不要同时注册到 `SceneScopeBinder`：Binder 采用“Scene 创建 Scope”，GameModules 采用“Scope 加载 Scene”，混用会为同一场景建立两套 Scope。
-
-运行时可通过 `Tools/ZArch/Arch Debug` 查看当前场景中的所有 `ArchitectureHostBootstrap`，并切换 Host 检查 Scope 树、状态与服务实例。
-
-## 测试覆盖
-
-Editor 测试位于 `Tests/Editor`，覆盖：
-
-- 子 Scope 覆盖与父级回退解析；
-- 同 Scope 初始化依赖；
-- 激活失败回滚；
-- Factory 循环依赖检测；
-- 异步初始化完成后才进入 Active；
-- 多 Host 的服务、Scope 与事件隔离；
-- 纯反初始化服务与父子 Scope 的销毁顺序；
-- Shutdown/Dispose 期间禁止重入创建 Scope；
-- 异常上报器抛错时仍完成清理；
-- Alias 不污染父级服务上下文；
-- 非法 timeout 与协作取消后的 Scope 回滚。
+目录用于源码导航，asmdef 用于依赖隔离。功能子目录不会额外创建程序集。
