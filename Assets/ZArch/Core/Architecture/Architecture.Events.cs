@@ -14,13 +14,21 @@ namespace ZArch {
 
         public IUnregister RegisterEvent<T>(Action<T> onEvent) {
             EnsureStarted();
-            if (onEvent == null) throw new ArgumentNullException(nameof(onEvent));
+
+            if (onEvent == null) {
+                throw new ArgumentNullException(nameof(onEvent));
+            }
+
             return m_EventSystem.Register(onEvent);
         }
 
         public void UnregisterEvent<T>(Action<T> onEvent) {
             EnsureStarted();
-            if (onEvent == null) throw new ArgumentNullException(nameof(onEvent));
+
+            if (onEvent == null) {
+                throw new ArgumentNullException(nameof(onEvent));
+            }
+
             m_EventSystem.Unregister(onEvent);
         }
     }

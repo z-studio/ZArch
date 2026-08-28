@@ -107,5 +107,4 @@ namespace ZArch {
             return Register((_, __, ___) => onEvent());
         }
     }
-
 }
