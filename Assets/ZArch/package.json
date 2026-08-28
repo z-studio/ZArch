@@ -1,0 +1,15 @@
+{
+  "name": "com.zstudio.zarch",
+  "version": "1.0.0",
+  "displayName": "ZArch",
+  "description": "ZArch 是一个面向 Unity 的分层架构框架。它保留 Model、System、Utility、Command、Query、Event 和 BindableProperty 这一套清晰的业务组织方式，并使用 Architecture 与层级 Scope 管理服务、生命周期、场景和独立游戏模块。",
+  "unity": "6000.0",
+  "keywords": [
+    "architecture",
+    "module",
+    "framework"
+  ],
+  "author": {
+    "name": "Z Studio"
+  }
+}
