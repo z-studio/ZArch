@@ -2,8 +2,8 @@ namespace ZArch {
     public interface ICanGetModel : IBelongToScope { }
     public interface ICanGetSystem : IBelongToScope { }
     public interface ICanGetUtility : IBelongToScope { }
-    public interface ICanSubscribeToEvents : IBelongToScope { }
-    public interface ICanPublishEvents : IBelongToScope { }
+    public interface ICanSubscribeEvent : IBelongToScope { }
+    public interface ICanPublishEvent : IBelongToScope { }
     public interface ICanSendCommand : IBelongToScope { }
     public interface ICanSendQuery : IBelongToScope { }
 
@@ -15,22 +15,16 @@ namespace ZArch {
         public static T GetUtility<T>(this ICanGetUtility self) where T : class, IUtility =>
             self.GetScope().Resolve<T>();
 
-        public static IUnregister SubscribeEvent<T>(
-            this ICanSubscribeToEvents self,
-            System.Action<T> onEvent
-        ) =>
+        public static IUnregister SubscribeEvent<T>(this ICanSubscribeEvent self, System.Action<T> onEvent) =>
             self.GetScope().Architecture.Subscribe(onEvent);
 
-        public static void UnsubscribeEvent<T>(
-            this ICanSubscribeToEvents self,
-            System.Action<T> onEvent
-        ) =>
+        public static void UnsubscribeEvent<T>(this ICanSubscribeEvent self, System.Action<T> onEvent) =>
             self.GetScope().Architecture.Unsubscribe(onEvent);
 
-        public static void PublishEvent<T>(this ICanPublishEvents self) where T : new() =>
+        public static void PublishEvent<T>(this ICanPublishEvent self) where T : new() =>
             self.GetScope().Architecture.Publish<T>();
 
-        public static void PublishEvent<T>(this ICanPublishEvents self, T message) =>
+        public static void PublishEvent<T>(this ICanPublishEvent self, T message) =>
             self.GetScope().Architecture.Publish(message);
 
         public static IUnregister SubscribeScopedEvent<T>(this IBelongToScope self, System.Action<T> onEvent) =>
