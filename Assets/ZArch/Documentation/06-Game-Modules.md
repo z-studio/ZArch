@@ -166,6 +166,8 @@ await launcher.ShutdownAsync();
 
 `ShutdownAsync` 会结束当前模块并阻止后续进入。Launcher 实现了 `IAsyncDeinitializable`；使用 `Architecture.ShutdownAsync()` 时框架会等待它完成。Unity 项目仍应在销毁 Bootstrap 前显式等待整个关闭流程。
 
+`ExitAsync`、`ShutdownAsync` 和进入失败回滚都会通过 `DisposeAsync` 清理 GameScope，因此模块内的 `IAsyncDeinitializable` 服务会被完整等待。不要用同步方式销毁仍有活动模块的 Launcher。
+
 ## 8. 何时使用 GameModules
 
 适合：

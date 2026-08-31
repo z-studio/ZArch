@@ -211,7 +211,7 @@ namespace ZArch.GameModules {
             }
 
             try {
-                session.Scope.Dispose();
+                await session.Scope.DisposeAsync(CancellationToken.None).ConfigureAwait(true);
             } catch (Exception exception) {
                 cleanupException = cleanupException == null
                     ? exception

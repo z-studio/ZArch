@@ -129,8 +129,8 @@ Scoped Event 沿用默认 Event 的能力限制。Controller 只能订阅，不�
 | `IGameModule.Configure(scope, context)` | 配置模块 Scope |
 | `GameModuleCatalog` | Unity 模块资产目录 |
 | `GameModuleLauncher.EnterAsync(id, context, token)` | 进入模块 |
-| `GameModuleLauncher.ExitAsync()` | 退出当前模块 |
-| `GameModuleLauncher.ShutdownAsync()` | 完整关闭并禁止再次进入 |
+| `GameModuleLauncher.ExitAsync()` | 退出当前模块并等待 GameScope 异步清理 |
+| `GameModuleLauncher.ShutdownAsync()` | 完整关闭、等待异步清理并禁止再次进入 |
 | `UnityGameContentLoader` | 通过 Scene Provider 加载内容 |
 | `GameModuleSceneEntry` | 将已加载场景绑定到模块 Scope |
 

@@ -69,6 +69,26 @@ namespace ZArch.Tests.Editor {
         }
 
         [Test]
+        public async Task ExitAsync_AwaitsScopeAsyncDeinitialization() {
+            var service = new BlockingAsyncDeinitializableService();
+            var module = new FakeModule("game-a", (scope, _) => scope.Register(service));
+            var launcher = CreateLauncher(module);
+            var session = await launcher.EnterAsync("game-a");
+
+            var exiting = launcher.ExitAsync();
+            await service.DeinitializationStarted.Task;
+
+            Assert.That(exiting.IsCompleted, Is.False);
+            Assert.That(session.Scope.IsDisposed, Is.False);
+
+            service.AllowDeinitialization.SetResult(true);
+            await exiting;
+
+            Assert.That(service.IsDeinitialized, Is.True);
+            Assert.That(session.Scope.IsDisposed, Is.True);
+        }
+
+        [Test]
         public void EnterAsync_WhenCancelledBeforeCreation_DoesNotCreateSession() {
             var launcher = CreateLauncher(new FakeModule("game-a"));
             using var cancellation = new CancellationTokenSource();
@@ -260,6 +280,19 @@ namespace ZArch.Tests.Editor {
 
             public ModuleService(string value) {
                 Value = value;
+            }
+        }
+
+        private sealed class BlockingAsyncDeinitializableService : IAsyncDeinitializable {
+            public TaskCompletionSource<bool> DeinitializationStarted { get; } = new();
+            public TaskCompletionSource<bool> AllowDeinitialization { get; } = new();
+            public bool IsDeinitialized { get; private set; }
+
+            public async Task DeinitializeAsync(CancellationToken cancellationToken) {
+                DeinitializationStarted.TrySetResult(true);
+                await AllowDeinitialization.Task;
+                cancellationToken.ThrowIfCancellationRequested();
+                IsDeinitialized = true;
             }
         }
     }
