@@ -106,7 +106,7 @@ this.SubscribeScopedEvent<SelectionChangedEvent>(RefreshSelection)
     .UnregisterWhenGameObjectDestroyed(gameObject);
 ```
 
-Scope Dispose 会自动解除 Scoped Event 订阅；Unity 自动注销仍然有价值，因为 GameObject 可能早于 Scope 被销毁或禁用。
+Scope Dispose 会自动解除默认 Event 和 Scoped Event 的 Patterns 订阅；Unity 自动注销仍然有价值，因为 GameObject 可能早于 Scope 被销毁或禁用。
 
 ## 4. 场景 Scope
 

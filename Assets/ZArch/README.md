@@ -217,6 +217,8 @@ Core 和 Patterns 均启用 `noEngineReferences`。
 - `Architecture` 调用 `Shutdown()` 后不能重新启动；需要重新创建实例。
 - Scope 激活后注册表被冻结，运行时变化通过创建或销毁子 Scope 表达。
 - 创建 Scope 的一方必须明确负责其释放；父 Scope 会自动释放所有子 Scope。
+- Patterns 事件订阅默认跟随所属 Scope 释放；直接调用 `Architecture.Subscribe` 的订阅需要手动管理。
+- `AbstractModel` 与 `AbstractSystem` 实例只能绑定一个 Scope；不同 Scope 必须使用不同实例。
 - 同步 Scope 不能包含 `IAsyncInitializable` 服务。
 - 包含 `IAsyncDeinitializable` 的 Scope 应使用 `DisposeAsync()` 或 `Architecture.ShutdownAsync()`。
 - Transient 默认不归 Scope 所有；需要统一释放时必须显式使用 `RegisterOwnedTransient`。

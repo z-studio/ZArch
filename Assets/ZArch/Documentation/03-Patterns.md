@@ -168,13 +168,12 @@ public IReadOnlyBindableProperty<int> Hp => m_Hp;
 Patterns 把 Architecture 范围事件作为默认事件。通常直接使用：
 
 ```csharp
-this.SubscribeEvent<PlayerLoggedInEvent>(OnLoggedIn)
-    .AddToUnregisterList(this);
+this.SubscribeEvent<PlayerLoggedInEvent>(OnLoggedIn);
 
 this.PublishEvent(new PlayerLoggedInEvent());
 ```
 
-默认事件可以跨越 LobbyScope、GameScope 等 Scope 边界，但仍然只存在于当前 Architecture 内。
+默认事件可以跨越 LobbyScope、GameScope 等 Scope 边界，但仍然只存在于当前 Architecture 内。Patterns 订阅会由调用者所属 Scope 托管，因此 GameScope 销毁后，其中的 System 不会继续收到默认事件。
 
 需要模块内部隔离时使用 Scoped Event：
 
@@ -236,9 +235,10 @@ battleScope.Publish(new CardSelectedEvent());    // Scoped Event
 Model/System：
 
 ```csharp
-this.SubscribeEvent<PlayerLoggedInEvent>(OnLoggedIn)
-    .AddToUnregisterList(this);
+this.SubscribeEvent<PlayerLoggedInEvent>(OnLoggedIn);
 ```
+
+默认 Event 和 Scoped Event 的 Patterns 订阅都会在所属 Scope Dispose 时自动解除，不需要再调用 `AddToUnregisterList(this)`。直接使用 Core 的 `architecture.Subscribe` 时仍需自行保存并解除注册。
 
 Controller：
 
@@ -247,6 +247,8 @@ model.Hp.SubscribeAndInvoke(UpdateHp)
     .UnregisterWhenGameObjectDestroyed(gameObject);
 ```
 
-Scoped Event 的订阅会在所属 Scope Dispose 时自动解除；如果需要在 Scope 结束前停止监听，保存返回的 `IUnregister` 并主动调用 `Unregister()`。
+Patterns Event 订阅会在所属 Scope Dispose 时自动解除；如果需要在 Scope 结束前停止监听，保存返回的 `IUnregister` 并主动调用 `Unregister()`。
+
+`AbstractModel` 与 `AbstractSystem` 只能绑定一次 Scope；把同一个实例注册到另一个 Scope 会立即抛出异常。需要另一份生命周期时应创建新实例。
 
 下一篇：[Unity 集成](04-Unity.md)。

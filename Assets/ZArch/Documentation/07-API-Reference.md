@@ -74,7 +74,7 @@
 | `GetUtility<T>()` | 解析 Utility |
 | `SendCommand(command)` | 执行 Command |
 | `SendQuery(query)` | 执行 Query |
-| `SubscribeEvent<T>()` | 订阅默认的 Architecture 范围事件 |
+| `SubscribeEvent<T>()` | 订阅默认的 Architecture 范围事件，并由所属 Scope 托管 |
 | `UnsubscribeEvent<T>()` | 取消默认事件订阅 |
 | `PublishEvent<T>()` | 发布默认事件 |
 | `SubscribeScopedEvent<T>()` | `ICanSubscribeEvent` 订阅当前 Scope 的事件 |

@@ -288,7 +288,9 @@ battleScope.Publish(
 
 ### 6.5 订阅生命周期与异常
 
-`Architecture.Subscribe` 返回的订阅不会因为某个 Scope Dispose 而自动解除，调用方必须保存 `IUnregister`，或交给 Model/System、Unity 生命周期扩展管理。
+直接调用 `Architecture.Subscribe` 创建的是脱离 Scope 的订阅，不会因为某个 Scope Dispose 而自动解除，调用方必须保存 `IUnregister`。
+
+Patterns 层的 `this.SubscribeEvent` 会把 Architecture Event 订阅交给调用者所属 Scope 托管；Scope Dispose 时自动解除。它仍然返回 `IUnregister`，可用于提前取消，或进一步绑定到更短的 Unity 对象生命周期。
 
 `ArchitectureScope.Subscribe` 会被当前 Scope 跟踪，Scope Dispose 时自动解除；返回的 `IUnregister` 仍可用于提前取消订阅。
 

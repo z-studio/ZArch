@@ -16,10 +16,10 @@ namespace ZArch {
             self.GetScope().Resolve<T>();
 
         public static IUnregister SubscribeEvent<T>(this ICanSubscribeEvent self, System.Action<T> onEvent) =>
-            self.GetScope().Architecture.Subscribe(onEvent);
+            self.GetScope().SubscribeArchitectureEvent(onEvent);
 
         public static void UnsubscribeEvent<T>(this ICanSubscribeEvent self, System.Action<T> onEvent) =>
-            self.GetScope().Architecture.Unsubscribe(onEvent);
+            self.GetScope().UnsubscribeArchitectureEvent(onEvent);
 
         public static void PublishEvent<T>(this ICanPublishEvent self) where T : new() =>
             self.GetScope().Architecture.Publish<T>();

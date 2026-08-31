@@ -250,6 +250,49 @@ namespace ZArch.Tests.Editor {
             Assert.That(localCount, Is.Zero);
         }
 
+        [Test]
+        public void PatternEventSubscription_IsRemovedWhenOwningScopeIsDisposed() {
+            ArchitectureEventListenerSystem listener = null;
+            var scope = m_Architecture.CreateRootScope(
+                "Game",
+                configured => configured.Register(listener = new ArchitectureEventListenerSystem())
+            );
+
+            m_Architecture.Publish(new ProbeEvent());
+            Assert.That(listener.CallCount, Is.EqualTo(1));
+
+            scope.Dispose();
+            m_Architecture.Publish(new ProbeEvent());
+
+            Assert.That(listener.CallCount, Is.EqualTo(1));
+        }
+
+        [Test]
+        public void Shutdown_WithScopeTrackedArchitectureSubscription_CleansUpWithoutError() {
+            var scope = m_Architecture.CreateRootScope(
+                "Game",
+                configured => configured.Register(new ArchitectureEventListenerSystem())
+            );
+
+            Assert.DoesNotThrow(m_Architecture.Shutdown);
+            Assert.That(scope.IsDisposed, Is.True);
+        }
+
+        [Test]
+        public void UnsubscribeEvent_DoesNotRemoveMatchingScopedEventSubscription() {
+            EventSpaceListenerSystem listener = null;
+            var scope = m_Architecture.CreateRootScope(
+                "Game",
+                configured => configured.Register(listener = new EventSpaceListenerSystem())
+            );
+
+            listener.UnsubscribeDefault();
+            m_Architecture.Publish(new ProbeEvent());
+            scope.Publish(new ProbeEvent());
+
+            Assert.That(listener.CallCount, Is.EqualTo(1));
+        }
+
         [TestCase(nameof(ArchitectureCapabilityExtensions.SubscribeScopedEvent), typeof(ICanSubscribeEvent))]
         [TestCase(nameof(ArchitectureCapabilityExtensions.UnsubscribeScopedEvent), typeof(ICanSubscribeEvent))]
         [TestCase(nameof(ArchitectureCapabilityExtensions.PublishScopedEvent), typeof(ICanPublishEvent))]
@@ -421,6 +464,46 @@ namespace ZArch.Tests.Editor {
             child.Dispose();
 
             Assert.That(system.GetScope(), Is.SameAs(root));
+        }
+
+        [Test]
+        public void AbstractModelAndSystem_GetScopeBeforeBinding_ThrowClearErrors() {
+            var model = new TestModel("unbound");
+            var system = new EventSenderSystem();
+
+            var modelException = Assert.Throws<InvalidOperationException>(() => model.GetScope());
+            var systemException = Assert.Throws<InvalidOperationException>(() => system.GetScope());
+
+            Assert.That(modelException.Message, Does.Contain("has not been bound"));
+            Assert.That(systemException.Message, Does.Contain("has not been bound"));
+        }
+
+        [Test]
+        public void AbstractSystem_CannotBeRegisteredInAnotherScope() {
+            var system = new EventSenderSystem();
+            var root = m_Architecture.CreateRootScope("Root", configured => configured.Register(system));
+
+            var exception = Assert.Throws<InvalidOperationException>(() =>
+                m_Architecture.CreateRootScope("Other", configured => configured.Register(system))
+            );
+
+            Assert.That(exception.Message, Does.Contain("already bound"));
+            Assert.That(system.GetScope(), Is.SameAs(root));
+            Assert.That(m_Architecture.RootScopes, Is.EqualTo(new[] { root }));
+        }
+
+        [Test]
+        public void AbstractModel_CannotBeRegisteredInAnotherScope() {
+            var model = new TestModel("shared");
+            var root = m_Architecture.CreateRootScope("Root", configured => configured.Register(model));
+
+            var exception = Assert.Throws<InvalidOperationException>(() =>
+                m_Architecture.CreateRootScope("Other", configured => configured.Register(model))
+            );
+
+            Assert.That(exception.Message, Does.Contain("already bound"));
+            Assert.That(model.GetScope(), Is.SameAs(root));
+            Assert.That(m_Architecture.RootScopes, Is.EqualTo(new[] { root }));
         }
 
         [Test]
@@ -635,6 +718,27 @@ namespace ZArch.Tests.Editor {
         private sealed class EventSenderSystem : AbstractSystem {
             protected override void OnInit() { }
             public void Raise() => this.PublishEvent(new ProbeEvent());
+        }
+
+        private sealed class ArchitectureEventListenerSystem : AbstractSystem {
+            public int CallCount { get; private set; }
+
+            protected override void OnInit() =>
+                this.SubscribeEvent<ProbeEvent>(_ => CallCount++);
+        }
+
+        private sealed class EventSpaceListenerSystem : AbstractSystem {
+            private Action<ProbeEvent> m_Handler;
+
+            public int CallCount { get; private set; }
+
+            protected override void OnInit() {
+                m_Handler = _ => CallCount++;
+                this.SubscribeEvent(m_Handler);
+                this.SubscribeScopedEvent(m_Handler);
+            }
+
+            public void UnsubscribeDefault() => this.UnsubscribeEvent(m_Handler);
         }
 
         private sealed class DeinitializableOnlyService : IDeinitializable {
