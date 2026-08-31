@@ -74,6 +74,28 @@ public sealed class SceneEntry : MonoBehaviour {
 
 一个 Controller 只能绑定一次；尝试绑定另一个 Scope 会抛出异常。这样可以避免场景对象意外持有已经释放的旧 Scope。
 
+### 池化 UIForm
+
+会被对象池复用的 UIForm 可以继承 `ReusableArchitectureController`。关闭时必须显式 `UnbindScope`，它会先清理绑定期间加入 `UnregisterList` 的订阅，再允许绑定另一个 Scope：
+
+```csharp
+public sealed class ShopForm : ReusableArchitectureController {
+    public void Open(ArchitectureScope scope) {
+        BindScope(scope);
+
+        this.SubscribeEvent<ShopChangedEvent>(Refresh).AddToUnregisterList(this);
+    }
+
+    public void Close() {
+        UnbindScope();
+    }
+
+    private void Refresh(ShopChangedEvent _) { }
+}
+```
+
+默认 `ArchitectureController` 仍然保持一次绑定。只有对象确实会经历“关闭但不销毁、随后进入另一 Scope”时才使用可复用版本。`UnbindScope` 只管理加入其 `UnregisterList` 的绑定期资源，因此池化 Controller 的订阅应显式调用 `AddToUnregisterList(this)`。
+
 ## 3. 自动解除注册
 
 ZArch 为 `IUnregister` 提供了 Unity 生命周期扩展：
@@ -107,6 +129,8 @@ this.SubscribeScopedEvent<SelectionChangedEvent>(RefreshSelection)
 ```
 
 Scope Dispose 会自动解除默认 Event 和 Scoped Event 的 Patterns 订阅；Unity 自动注销仍然有价值，因为 GameObject 可能早于 Scope 被销毁或禁用。
+
+ZArch 的 Unity 入口按主线程串行模型设计。Game Framework 或网络模块从后台线程回调时，应先切回 Unity 主线程，再访问 Controller、Architecture、Scope 或事件 API。
 
 ## 4. 场景 Scope
 

@@ -22,14 +22,30 @@ namespace ZArch {
             }
 
             m_HasStartedLifecycle = true;
+            IsStarted = true;
 
             try {
                 OnStart();
-                IsStarted = true;
-            } catch {
+
+                if (!IsStarted || m_IsTerminated) {
+                    throw new InvalidOperationException(
+                        $"{GetType().Name} was shutdown while OnStart was running."
+                    );
+                }
+            } catch (Exception startupException) {
                 IsStarted = false;
-                Shutdown();
-                throw;
+
+                try {
+                    Shutdown();
+                } catch (Exception cleanupException) {
+                    throw new AggregateException(
+                        $"Starting {GetType().Name} failed, and rolling it back also failed.",
+                        startupException,
+                        cleanupException
+                    );
+                }
+
+                ExceptionDispatchInfo.Capture(startupException).Throw();
             }
         }
 

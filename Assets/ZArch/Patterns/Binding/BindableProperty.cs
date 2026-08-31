@@ -2,11 +2,15 @@ using System;
 
 namespace ZArch {
     public class BindableProperty<T> : IBindableProperty<T> {
+        private static Func<T, T, bool> s_Comparer = (a, b) => a == null ? b == null : a.Equals(b);
         protected T mValue;
         private readonly Signal<T> m_OnValueChanged = new();
         private Func<T, T, bool> m_Comparer;
 
-        public static Func<T, T, bool> Comparer { get; set; } = (a, b) => a == null ? b == null : a.Equals(b);
+        public static Func<T, T, bool> Comparer {
+            get => s_Comparer;
+            set => s_Comparer = value ?? throw new ArgumentNullException(nameof(value));
+        }
 
         public BindableProperty(T defaultValue = default) {
             mValue = defaultValue;

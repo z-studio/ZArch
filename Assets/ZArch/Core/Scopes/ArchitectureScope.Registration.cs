@@ -19,6 +19,22 @@ namespace ZArch {
             );
         }
 
+        public void RegisterExternal<TService>(TService instance) where TService : class {
+            if (instance == null) {
+                throw new ArgumentNullException(nameof(instance));
+            }
+
+            RegisterDescriptor(
+                typeof(TService),
+                _ => instance,
+                EServiceLifetime.Scoped,
+                false,
+                0,
+                instance,
+                false
+            );
+        }
+
         public void Register<TService, TImplementation>(bool owned = true, int initializationOrder = 0)
             where TService : class
             where TImplementation : class, TService, new() {

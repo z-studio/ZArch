@@ -33,6 +33,33 @@ namespace ZArch.Tests.Editor {
         }
 
         [Test]
+        public void OnStart_CanUseArchitectureApis() {
+            var architecture = new ScopeCreatingArchitecture();
+
+            try {
+                architecture.Start();
+
+                Assert.That(architecture.StartedScope, Is.Not.Null);
+                Assert.That(architecture.StartedScope.IsActive, Is.True);
+                Assert.That(architecture.RootScopes, Is.EqualTo(new[] { architecture.StartedScope }));
+            } finally {
+                architecture.Dispose();
+            }
+        }
+
+        [Test]
+        public void Start_WhenStartupAndRollbackFail_PreservesBothExceptions() {
+            var architecture = new FailingStartArchitecture();
+
+            var exception = Assert.Throws<AggregateException>(architecture.Start);
+
+            Assert.That(exception.InnerExceptions, Has.Count.EqualTo(2));
+            Assert.That(exception.InnerExceptions[0].Message, Is.EqualTo("startup failed"));
+            Assert.That(exception.InnerExceptions[1].Message, Is.EqualTo("rollback failed"));
+            Assert.That(architecture.IsStarted, Is.False);
+        }
+
+        [Test]
         public void SystemInitialization_CanResolveInitializedModelInSameScope() {
             ProbeSystem system = null;
             var model = new TestModel("model");
@@ -90,6 +117,24 @@ namespace ZArch.Tests.Editor {
             Assert.That(first, Is.Not.SameAs(second));
             Assert.That(created, Has.Count.EqualTo(2));
             Assert.That(created, Has.All.Matches<DisposableService>(service => !service.IsDisposed));
+        }
+
+        [Test]
+        public void RegisterExternal_DoesNotBindInitializeOrDisposeExternalInstance() {
+            var external = new ExternalLifecycleService();
+            var scope = m_Architecture.CreateRootScope(
+                "External",
+                configured => configured.RegisterExternal(external)
+            );
+
+            Assert.That(scope.Resolve<ExternalLifecycleService>(), Is.SameAs(external));
+            Assert.That(external.SetScopeCount, Is.Zero);
+            Assert.That(external.InitializeCount, Is.Zero);
+
+            scope.Dispose();
+
+            Assert.That(external.DeinitializeCount, Is.Zero);
+            Assert.That(external.DisposeCount, Is.Zero);
         }
 
         [Test]
@@ -623,6 +668,24 @@ namespace ZArch.Tests.Editor {
             Assert.That(exception.Message, Does.Contain("cannot be restarted"));
         }
 
+        [Test]
+        public void BindablePropertyComparer_RejectsNull() {
+            Assert.Throws<ArgumentNullException>(() => BindableProperty<int>.Comparer = null);
+            Assert.That(BindableProperty<int>.Comparer, Is.Not.Null);
+        }
+
+        private sealed class ScopeCreatingArchitecture : Architecture {
+            public ArchitectureScope StartedScope { get; private set; }
+
+            protected override void OnStart() =>
+                StartedScope = CreateRootScope("Started", _ => { });
+        }
+
+        private sealed class FailingStartArchitecture : Architecture {
+            protected override void OnStart() => throw new InvalidOperationException("startup failed");
+            protected override void OnShutdown() => throw new InvalidOperationException("rollback failed");
+        }
+
         private sealed class TestModel : AbstractModel {
             public string Value { get; }
 
@@ -711,6 +774,22 @@ namespace ZArch.Tests.Editor {
         private sealed class DisposableService : IDisposable {
             public bool IsDisposed { get; private set; }
             public void Dispose() => IsDisposed = true;
+        }
+
+        private sealed class ExternalLifecycleService :
+            ICanSetScope,
+            IInitializable,
+            IDeinitializable,
+            IDisposable {
+            public int SetScopeCount { get; private set; }
+            public int InitializeCount { get; private set; }
+            public int DeinitializeCount { get; private set; }
+            public int DisposeCount { get; private set; }
+
+            public void SetScope(ArchitectureScope scope) => SetScopeCount++;
+            public void Initialize() => InitializeCount++;
+            public void Deinitialize() => DeinitializeCount++;
+            public void Dispose() => DisposeCount++;
         }
 
         private readonly struct ProbeEvent { }

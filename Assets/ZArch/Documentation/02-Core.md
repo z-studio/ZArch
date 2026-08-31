@@ -29,12 +29,19 @@ nextArchitecture.Start();
 
 ```csharp
 public sealed class GameArchitecture : Architecture {
-    protected override void OnStart() { }
+    protected override void OnStart() {
+        CreateRootScope("Infrastructure", scope => {
+            scope.Register<IClock>(new SystemClock());
+        });
+    }
+
     protected override void OnShutdown() { }
 }
 ```
 
-服务应在 Scope setup 中注册，不要在 `OnStart` 中偷偷创建默认 Scope。
+执行 `OnStart` 时 Architecture 已处于 Started 状态，可以创建 Scope、订阅事件和使用其他 Architecture API。启动失败时，已创建的 Scope 会自动回滚；如果启动和回滚同时失败，调用方会收到包含两者的 `AggregateException`。
+
+Unity 项目通常仍把根 Scope 组装放在 Bootstrap 的 `ConfigureRoot` 中；`OnStart` 更适合不使用 Bootstrap 的宿主，或真正属于 Architecture 子类的基础设施。
 
 ## 2. Scope 树
 
@@ -88,8 +95,10 @@ scope.Register<IStorage>(new LocalStorage());
 外部拥有的对象：
 
 ```csharp
-scope.Register<IAnalytics>(externalAnalytics, owned: false);
+scope.RegisterExternal<IAnalytics>(externalAnalytics);
 ```
+
+`RegisterExternal` 只把对象加入解析表，不调用 `SetScope`、初始化、反初始化或 `Dispose`。适合直接注册 Game Framework Component、SDK 单例以及由其他容器管理的对象。底层 `Register(..., owned: false)` 仍可使用，但它仍会注入 Scope；外部对象优先使用语义更明确的 `RegisterExternal`。
 
 ### 实现类型
 
@@ -212,6 +221,8 @@ await architecture.ShutdownAsync(cancellationToken);
 
 同步 `Dispose` 遇到仅支持异步清理的服务会报告错误。清理过程仍会继续处理其余服务，最后将异常交给 `UnhandledExceptionHandler`；没有设置处理器时向调用方抛出。
 
+Architecture、Scope、注册表和事件总线采用串行模型，不提供内部锁。Unity 项目应在主线程创建/销毁 Scope、解析服务和发布事件；后台任务完成后先切回所属同步上下文。
+
 ## 6. 默认事件与 Scoped Event
 
 Core 内部保留两套相互隔离的事件空间：Architecture Event Bus 和每个 Scope 自己的 Event Bus。它们使用相同的 `Subscribe / Unsubscribe / Publish` 动词，但接收者不同。
@@ -316,7 +327,8 @@ Created → Configuring → Initializing → Active → Disposing → Disposed
 ## 8. 所有权原则
 
 - `owned: true`：Scope 负责初始化、反初始化和 Dispose。
-- `owned: false`：调用方负责对象生命周期。
+- `owned: false`：调用方负责对象生命周期，但普通 `Register` 仍会为 `ICanSetScope` 注入当前 Scope。
+- `RegisterExternal`：既不接管生命周期，也不向实例注入 Scope。
 - 创建 Child Scope 的代码负责决定它何时结束。
 - 父 Scope Dispose 会自动 Dispose 全部子 Scope。
 

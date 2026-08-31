@@ -144,6 +144,8 @@ await bootstrap.Initialization;
 var root = bootstrap.RootScope;
 ```
 
+Bootstrap 会主动观察 `Initialization` 并把未处理的初始化异常记录到 Unity Console；外部仍应 `await Initialization`，以便当前流程根据成功、取消或失败做出决定。
+
 异步 Bootstrap 默认要求显式关闭。退出时等待 `ShutdownAsync` 完成后再销毁 Bootstrap，不要使用 `async void` 承载关闭流程。
 
 下一篇：[GameModules](06-Game-Modules.md)

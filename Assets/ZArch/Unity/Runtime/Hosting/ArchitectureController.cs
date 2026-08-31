@@ -38,5 +38,47 @@ namespace ZArch.Unity {
 
             return m_Scope;
         }
+
+        protected ArchitectureScope GetBoundScopeOrNull() => m_Scope;
+
+        protected void ClearScopeBinding(ArchitectureScope expectedScope) {
+            if (expectedScope == null) {
+                throw new ArgumentNullException(nameof(expectedScope));
+            }
+
+            if (!ReferenceEquals(m_Scope, expectedScope)) {
+                throw new InvalidOperationException(
+                    $"{GetType().Name} is not bound to scope '{expectedScope.Name}'."
+                );
+            }
+
+            m_Scope = null;
+        }
+    }
+
+    public abstract class ReusableArchitectureController : ArchitectureController, IUnregisterList {
+        public System.Collections.Generic.List<IUnregister> UnregisterList { get; } = new();
+
+        public void UnbindScope() {
+            var scope = GetBoundScopeOrNull();
+
+            if (scope == null) {
+                return;
+            }
+
+            Exception unregisterException = null;
+
+            try {
+                this.UnregisterAll();
+            } catch (Exception exception) {
+                unregisterException = exception;
+            } finally {
+                ClearScopeBinding(scope);
+            }
+
+            if (unregisterException != null) {
+                System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(unregisterException).Throw();
+            }
+        }
     }
 }

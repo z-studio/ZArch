@@ -222,7 +222,8 @@ Core 和 Patterns 均启用 `noEngineReferences`。
 - 同步 Scope 不能包含 `IAsyncInitializable` 服务。
 - 包含 `IAsyncDeinitializable` 的 Scope 应使用 `DisposeAsync()` 或 `Architecture.ShutdownAsync()`。
 - Transient 默认不归 Scope 所有；需要统一释放时必须显式使用 `RegisterOwnedTransient`。
-- 注册事件后必须保存 `IUnregister`，或使用 Unity 自动注销扩展。
+- Game Framework Component 或 SDK 单例等外部对象使用 `RegisterExternal`，ZArch 不接管其 Scope 与生命周期。
+- Patterns 事件订阅会随 Scope 释放；订阅者寿命短于 Scope 时保存 `IUnregister`，并使用 Unity 自动注销扩展或绑定期列表提前解除。
 - ZArch 不提供内部锁，也不承诺并发线程安全；后台任务完成后应先回到所属同步上下文。
 
 ## 源码目录

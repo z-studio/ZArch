@@ -30,11 +30,19 @@ namespace ZArch.Unity {
             }
 
             m_LifetimeCts = new CancellationTokenSource();
-            Architecture = CreateArchitecture()
-                           ?? throw new InvalidOperationException("CreateArchitecture returned null.");
-            Architecture.Start();
-            Architecture.UnhandledExceptionHandler = Debug.LogException;
-            Initialization = InitializeAsync(m_LifetimeCts.Token);
+            var lifetimeToken = m_LifetimeCts.Token;
+
+            try {
+                Architecture = CreateArchitecture()
+                               ?? throw new InvalidOperationException("CreateArchitecture returned null.");
+                Architecture.UnhandledExceptionHandler = Debug.LogException;
+                Architecture.Start();
+                Initialization = InitializeAsync(lifetimeToken);
+                _ = ObserveInitializationAsync(Initialization, lifetimeToken);
+            } catch {
+                ClearArchitecture();
+                throw;
+            }
         }
 
         private async Task InitializeAsync(CancellationToken cancellationToken) {
@@ -46,9 +54,28 @@ namespace ZArch.Unity {
                     ConfigureRootAsync,
                     cancellationToken: cancellationToken
                 ).ConfigureAwait(true);
-            } catch {
-                await architecture.ShutdownAsync(CancellationToken.None).ConfigureAwait(true);
-                throw;
+            } catch (Exception initializationException) {
+                try {
+                    await architecture.ShutdownAsync(CancellationToken.None).ConfigureAwait(true);
+                } catch (Exception cleanupException) {
+                    throw new AggregateException(
+                        $"Initializing {GetType().Name} failed, and rolling it back also failed.",
+                        initializationException,
+                        cleanupException
+                    );
+                }
+
+                ExceptionDispatchInfo.Capture(initializationException).Throw();
+            }
+        }
+
+        private async Task ObserveInitializationAsync(Task initialization, CancellationToken lifetimeToken) {
+            try {
+                await initialization.ConfigureAwait(true);
+            } catch (OperationCanceledException) when (lifetimeToken.IsCancellationRequested) {
+                // Expected when shutdown interrupts initialization.
+            } catch (Exception exception) {
+                Debug.LogException(exception, this);
             }
         }
 

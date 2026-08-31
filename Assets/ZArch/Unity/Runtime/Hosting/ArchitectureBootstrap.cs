@@ -22,14 +22,26 @@ namespace ZArch.Unity {
 
             Architecture = CreateArchitecture()
                            ?? throw new InvalidOperationException("CreateArchitecture returned null.");
+            Architecture.UnhandledExceptionHandler = Debug.LogException;
 
             try {
                 Architecture.Start();
-                Architecture.UnhandledExceptionHandler = Debug.LogException;
                 RootScope = Architecture.CreateRootScope(RootScopeName, ConfigureRoot);
-            } catch {
-                Architecture.Shutdown();
+            } catch (Exception startupException) {
+                try {
+                    Architecture.Shutdown();
+                } catch (Exception cleanupException) {
+                    Architecture = null;
+                    RootScope = null;
+                    throw new AggregateException(
+                        $"Starting {GetType().Name} failed, and rolling it back also failed.",
+                        startupException,
+                        cleanupException
+                    );
+                }
+
                 Architecture = null;
+                RootScope = null;
                 throw;
             }
         }

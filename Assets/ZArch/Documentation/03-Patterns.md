@@ -70,7 +70,7 @@ public interface IStorage : IUtility {
 }
 ```
 
-它可以由 Scope 拥有，也可以作为外部对象以 `owned: false` 注册。
+它可以由 Scope 拥有；如果实例由 Game Framework、SDK 或其他容器管理，则使用 `RegisterExternal` 注册。
 
 ## 5. Command
 
@@ -155,6 +155,8 @@ var progress = new BindableProperty<float>()
 ```
 
 Unity Runtime 会为常用 Unity 值类型注册比较器，`float` 默认使用 `Mathf.Approximately`。
+
+全局 `BindableProperty<T>.Comparer` 不能设置为 `null`；需要单个属性采用特殊比较规则时使用 `WithComparer(...)`，避免影响同类型的其他新实例。
 
 只向外暴露读取权限：
 

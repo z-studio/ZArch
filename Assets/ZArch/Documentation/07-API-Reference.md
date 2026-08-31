@@ -22,6 +22,7 @@
 | --- | --- |
 | `CreateChild(...)` / `CreateChildAsync(...)` | 创建子 Scope |
 | `Register<T>(instance, owned, initializationOrder)` | 注册实例 |
+| `RegisterExternal<T>(instance)` | 注册外部拥有的实例，不注入 Scope 或管理生命周期 |
 | `Register<TService,TImplementation>(...)` | 通过无参构造创建实现 |
 | `RegisterScopedFactory<T>(factory, owned, order)` | 注册每个 Scope 一个实例的 Factory |
 | `RegisterTransient<T>(factory)` | 注册调用方拥有的 Transient |
@@ -116,6 +117,7 @@ Scoped Event 沿用默认 Event 的能力限制。Controller 只能订阅，不�
 | `ArchitectureBootstrap` | 创建 Architecture 与根 Scope |
 | `AsyncArchitectureBootstrap` | 创建异步根 Scope，并暴露 `Initialization` |
 | `ArchitectureController.BindScope(scope)` | 绑定组件使用的 Scope |
+| `ReusableArchitectureController.UnbindScope()` | 清理绑定期订阅并允许池化组件重新绑定 |
 | `SceneScopeManager` | 根据场景加载/卸载管理 Scope |
 | `UnregisterWhenDisabled(...)` | Behaviour 禁用时解除监听 |
 | `UnregisterWhenGameObjectDestroyed(...)` | 对象销毁时解除监听 |
