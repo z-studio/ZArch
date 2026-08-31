@@ -33,6 +33,8 @@ Model、System 等能力接口用于表达分层权限：例如 Model 可以访�
 
 事件默认发布到整个 Architecture；大多数业务代码只需要 `SubscribeEvent / PublishEvent`。只有需要把消息限制在当前模块，或需要沿 Scope 父链冒泡时，才使用 `SubscribeScopedEvent / PublishScopedEvent`。两套事件不会自动互相转发，AppScope 发布的 Scoped Event 也不会向子 Scope 广播。
 
+默认 Event 与 Scoped Event 遵守同一套分层能力：Controller 负责订阅事件并通过 Command/Query 向下发起操作，Model/System/Command 才能发布事件。Scoped Event 不会绕过这一限制。
+
 ```csharp
 // 默认事件：同一 Architecture 内的订阅者都能收到。
 this.PublishEvent(new PlayerChangedEvent());

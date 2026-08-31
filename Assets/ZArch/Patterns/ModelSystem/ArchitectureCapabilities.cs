@@ -27,14 +27,14 @@ namespace ZArch {
         public static void PublishEvent<T>(this ICanPublishEvent self, T message) =>
             self.GetScope().Architecture.Publish(message);
 
-        public static IUnregister SubscribeScopedEvent<T>(this IBelongToScope self, System.Action<T> onEvent) =>
+        public static IUnregister SubscribeScopedEvent<T>(this ICanSubscribeEvent self, System.Action<T> onEvent) =>
             self.GetScope().Subscribe(onEvent);
 
-        public static void UnsubscribeScopedEvent<T>(this IBelongToScope self, System.Action<T> onEvent) =>
+        public static void UnsubscribeScopedEvent<T>(this ICanSubscribeEvent self, System.Action<T> onEvent) =>
             self.GetScope().Unsubscribe(onEvent);
 
         public static void PublishScopedEvent<T>(
-            this IBelongToScope self,
+            this ICanPublishEvent self,
             T message,
             EEventPropagation propagation = EEventPropagation.Local
         ) =>

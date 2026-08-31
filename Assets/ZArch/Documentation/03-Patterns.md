@@ -194,6 +194,18 @@ this.PublishScopedEvent(
 
 `PublishScopedEvent` 默认只通知调用者所属 Scope；`Bubble` 只向祖先传播，不会向子 Scope、兄弟 Scope 或默认事件总线传播。
 
+默认 Event 与 Scoped Event 使用相同的能力边界：
+
+| 类型 | 订阅 Event | 发布 Event |
+| --- | --- | --- |
+| Controller | 可以 | 不可以；通过 Command/Query 向下发起操作 |
+| Model | 不可以 | 可以 |
+| System | 可以 | 可以 |
+| Command | 不可以 | 可以 |
+| Query | 不可以 | 不可以 |
+
+因此 Controller 可以调用 `SubscribeScopedEvent`，但不能调用 `PublishScopedEvent`；Scoped Event 只改变消息范围，不改变分层通信方向。
+
 直接调用 Core API 时，接收者已经说明事件边界：
 
 ```csharp

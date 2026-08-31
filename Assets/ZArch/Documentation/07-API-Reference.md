@@ -77,9 +77,9 @@
 | `SubscribeEvent<T>()` | 订阅默认的 Architecture 范围事件 |
 | `UnsubscribeEvent<T>()` | 取消默认事件订阅 |
 | `PublishEvent<T>()` | 发布默认事件 |
-| `SubscribeScopedEvent<T>()` | 订阅当前 Scope 的事件 |
-| `UnsubscribeScopedEvent<T>()` | 取消当前 Scope 的事件订阅 |
-| `PublishScopedEvent<T>()` | 发布 Scoped Event，可选择向祖先冒泡 |
+| `SubscribeScopedEvent<T>()` | `ICanSubscribeEvent` 订阅当前 Scope 的事件 |
+| `UnsubscribeScopedEvent<T>()` | `ICanSubscribeEvent` 取消当前 Scope 的事件订阅 |
+| `PublishScopedEvent<T>()` | `ICanPublishEvent` 发布 Scoped Event，可选择向祖先冒泡 |
 
 Model 与 System 的基类为 `AbstractModel`、`AbstractSystem`；Command/Query 基类为 `AbstractCommand`、`AbstractCommand<TResult>`、`AbstractQuery<TResult>`。
 
@@ -92,6 +92,8 @@ Model 与 System 的基类为 `AbstractModel`、`AbstractSystem`；Command/Query
 | 当前 Scope 到所有祖先 | `PublishScopedEvent(..., EEventPropagation.Bubble)` |
 
 `AppScope.Publish(...)` 只通知 AppScope，不会向子 Scope 广播，也不等于默认 `PublishEvent(...)`。
+
+Scoped Event 沿用默认 Event 的能力限制。Controller 只能订阅，不能发布；Model 和 Command 可以发布但不能订阅；System 可以订阅和发布；Query 不参与事件。
 
 ## BindableProperty
 

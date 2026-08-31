@@ -250,6 +250,19 @@ namespace ZArch.Tests.Editor {
             Assert.That(localCount, Is.Zero);
         }
 
+        [TestCase(nameof(ArchitectureCapabilityExtensions.SubscribeScopedEvent), typeof(ICanSubscribeEvent))]
+        [TestCase(nameof(ArchitectureCapabilityExtensions.UnsubscribeScopedEvent), typeof(ICanSubscribeEvent))]
+        [TestCase(nameof(ArchitectureCapabilityExtensions.PublishScopedEvent), typeof(ICanPublishEvent))]
+        public void ScopedEventExtensions_RespectEventCapabilities(string methodName, Type receiverType) {
+            var method = Array.Find(
+                typeof(ArchitectureCapabilityExtensions).GetMethods(),
+                candidate => candidate.Name == methodName
+            );
+
+            Assert.That(method, Is.Not.Null);
+            Assert.That(method.GetParameters()[0].ParameterType, Is.EqualTo(receiverType));
+        }
+
         [Test]
         public void DeinitializableOnlyService_IsDeinitializedWithItsScope() {
             var service = new DeinitializableOnlyService();
