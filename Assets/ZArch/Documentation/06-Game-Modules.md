@@ -168,6 +168,8 @@ await launcher.ShutdownAsync();
 
 `ExitAsync`、`ShutdownAsync` 和进入失败回滚都会通过 `DisposeAsync` 清理 GameScope，因此模块内的 `IAsyncDeinitializable` 服务会被完整等待。不要用同步方式销毁仍有活动模块的 Launcher。
 
+如果 Content 卸载失败，Launcher 会保留待清理状态并令 `HasPendingCleanup` 为 `true`。此时不能进入其他模块；修复外部加载器状态后再次调用 `ExitAsync` 会只重试尚未完成的清理阶段。这样不会在旧游戏内容残留时启动新游戏。
+
 ## 8. 何时使用 GameModules
 
 适合：

@@ -15,11 +15,13 @@ namespace ZArch.GameModules {
         private readonly CancellationTokenSource m_LifetimeCts = new();
         private TaskCompletionSource<bool> m_TransitionCompletion;
         private Task m_ShutdownTask;
+        private GameModuleSession m_PendingCleanup;
         private bool m_IsShuttingDown;
         private bool m_IsDisposed;
 
         public GameModuleSession Current { get; private set; }
         public bool IsTransitioning { get; private set; }
+        public bool HasPendingCleanup => m_PendingCleanup != null;
         public IReadOnlyCollection<IGameModule> Modules { get; }
 
         public GameModuleLauncher(
@@ -68,6 +70,13 @@ namespace ZArch.GameModules {
         ) {
             EnsureUsable();
 
+            if (HasPendingCleanup) {
+                throw new InvalidOperationException(
+                    $"Game module '{m_PendingCleanup.Module.Id}' still has content pending cleanup. "
+                    + "Call ExitAsync to retry cleanup before entering another game."
+                );
+            }
+
             if (!TryGetModule(gameId, out var module)) {
                 throw new KeyNotFoundException($"Game module '{gameId}' is not registered.");
             }
@@ -108,7 +117,7 @@ namespace ZArch.GameModules {
                 return entering;
             } catch (Exception enterException) {
                 if (entering != null) {
-                    var cleanupException = await CleanupAsync(entering).ConfigureAwait(true);
+                    var cleanupException = await CleanupAndTrackAsync(entering).ConfigureAwait(true);
 
                     if (cleanupException != null) {
                         throw new AggregateException(
@@ -131,7 +140,7 @@ namespace ZArch.GameModules {
             BeginTransition();
 
             try {
-                var session = Current;
+                var session = Current ?? m_PendingCleanup;
 
                 if (session == null) {
                     return;
@@ -139,7 +148,7 @@ namespace ZArch.GameModules {
 
                 Current = null;
 
-                var cleanupException = await CleanupAsync(session).ConfigureAwait(true);
+                var cleanupException = await CleanupAndTrackAsync(session).ConfigureAwait(true);
 
                 if (cleanupException != null) {
                     ExceptionDispatchInfo.Capture(cleanupException).Throw();
@@ -175,14 +184,14 @@ namespace ZArch.GameModules {
                     await transition.ConfigureAwait(true);
                 }
 
-                var session = Current;
+                var session = Current ?? m_PendingCleanup;
                 Current = null;
 
                 if (session == null) {
                     return;
                 }
 
-                var cleanupException = await CleanupAsync(session).ConfigureAwait(true);
+                var cleanupException = await CleanupAndTrackAsync(session).ConfigureAwait(true);
 
                 if (cleanupException != null) {
                     ExceptionDispatchInfo.Capture(cleanupException).Throw();
@@ -194,28 +203,48 @@ namespace ZArch.GameModules {
             }
         }
 
+        private async Task<Exception> CleanupAndTrackAsync(GameModuleSession session) {
+            m_PendingCleanup = session;
+            var cleanupException = await CleanupAsync(session).ConfigureAwait(true);
+
+            if (session.IsCleanedUp && ReferenceEquals(m_PendingCleanup, session)) {
+                m_PendingCleanup = null;
+            }
+
+            return cleanupException;
+        }
+
         private async Task<Exception> CleanupAsync(GameModuleSession session) {
             if (session.IsCleanedUp) {
                 return null;
             }
 
-            session.IsCleanedUp = true;
             Exception cleanupException = null;
 
-            if (session.Content != null) {
-                try {
-                    await m_ContentLoader.UnloadAsync(session.Content).ConfigureAwait(true);
-                } catch (Exception exception) {
-                    cleanupException = exception;
+            if (!session.IsContentUnloaded) {
+                if (session.Content == null) {
+                    session.IsContentUnloaded = true;
+                } else {
+                    try {
+                        await m_ContentLoader.UnloadAsync(session.Content).ConfigureAwait(true);
+                        session.Content = null;
+                        session.IsContentUnloaded = true;
+                    } catch (Exception exception) {
+                        cleanupException = exception;
+                    }
                 }
             }
 
-            try {
-                await session.Scope.DisposeAsync(CancellationToken.None).ConfigureAwait(true);
-            } catch (Exception exception) {
-                cleanupException = cleanupException == null
-                    ? exception
-                    : new AggregateException(cleanupException, exception);
+            if (!session.IsScopeDisposed) {
+                try {
+                    await session.Scope.DisposeAsync(CancellationToken.None).ConfigureAwait(true);
+                } catch (Exception exception) {
+                    cleanupException = cleanupException == null
+                        ? exception
+                        : new AggregateException(cleanupException, exception);
+                } finally {
+                    session.IsScopeDisposed = session.Scope.IsDisposed;
+                }
             }
 
             return cleanupException;
@@ -248,9 +277,9 @@ namespace ZArch.GameModules {
                 return;
             }
 
-            if (Current != null || IsTransitioning) {
+            if (Current != null || HasPendingCleanup || IsTransitioning) {
                 throw new InvalidOperationException(
-                    "GameModuleLauncher has active asynchronous content. "
+                    "GameModuleLauncher has active or pending asynchronous content. "
                     + "Await ShutdownAsync or Architecture.ShutdownAsync before synchronous disposal."
                 );
             }

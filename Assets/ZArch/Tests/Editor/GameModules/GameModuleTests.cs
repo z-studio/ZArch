@@ -117,6 +117,7 @@ namespace ZArch.Tests.Editor {
             Assert.That(exception.InnerExceptions[0], Is.TypeOf<OperationCanceledException>());
             Assert.That(exception.InnerExceptions[1].Message, Does.Contain("Failed to unload game-a"));
             Assert.That(launcher.Current, Is.Null);
+            Assert.That(launcher.HasPendingCleanup, Is.True);
             Assert.That(m_AppRoot.Children, Is.Empty);
         }
 
@@ -137,15 +138,30 @@ namespace ZArch.Tests.Editor {
         }
 
         [Test]
-        public async Task ExitAsync_WhenContentUnloadFails_StillDisposesScopeAndClearsCurrent() {
-            var launcher = CreateLauncher(new FakeModule("game-a"));
+        public async Task ExitAsync_WhenContentUnloadFails_BlocksEnterUntilCleanupRetrySucceeds() {
+            var launcher = CreateLauncher(new FakeModule("game-a"), new FakeModule("game-b"));
             var session = await launcher.EnterAsync("game-a");
             m_ContentLoader.FailUnloading = true;
 
             Assert.ThrowsAsync<InvalidOperationException>(async () => await launcher.ExitAsync());
 
             Assert.That(launcher.Current, Is.Null);
+            Assert.That(launcher.HasPendingCleanup, Is.True);
             Assert.That(session.Scope.IsDisposed, Is.True);
+
+            var enterException = Assert.ThrowsAsync<InvalidOperationException>(async () =>
+                await launcher.EnterAsync("game-b")
+            );
+
+            Assert.That(enterException.Message, Does.Contain("pending cleanup"));
+
+            m_ContentLoader.FailUnloading = false;
+            await launcher.ExitAsync();
+
+            Assert.That(launcher.HasPendingCleanup, Is.False);
+
+            var next = await launcher.EnterAsync("game-b");
+            Assert.That(launcher.Current, Is.SameAs(next));
         }
 
         [Test]

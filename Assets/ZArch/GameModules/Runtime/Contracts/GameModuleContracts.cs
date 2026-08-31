@@ -34,6 +34,7 @@ namespace ZArch.GameModules {
     public interface IGameModuleLauncher {
         GameModuleSession Current { get; }
         bool IsTransitioning { get; }
+        bool HasPendingCleanup { get; }
         IReadOnlyCollection<IGameModule> Modules { get; }
 
         bool TryGetModule(string gameId, out IGameModule module);
