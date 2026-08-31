@@ -63,7 +63,8 @@ namespace ZArch.GameModules {
         public async Task<GameModuleSession> EnterAsync(
             string gameId,
             GameEnterContext context = null,
-            CancellationToken cancellationToken = default
+            CancellationToken cancellationToken = default,
+            string packageName = ""
         ) {
             EnsureUsable();
 
@@ -95,7 +96,7 @@ namespace ZArch.GameModules {
 
                 entering = new GameModuleSession(module, context, scope);
 
-                entering.Content = await m_ContentLoader.LoadAsync(module, scope, context, transitionToken)
+                entering.Content = await m_ContentLoader.LoadAsync(module, scope, context, transitionToken, packageName)
                                                         .ConfigureAwait(true);
 
                 if (entering.Content == null) {

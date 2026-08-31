@@ -16,7 +16,8 @@ namespace ZArch.GameModules {
             IGameModule module,
             ArchitectureScope scope,
             GameEnterContext context,
-            CancellationToken cancellationToken
+            CancellationToken cancellationToken,
+            string packageName
         );
 
         Task UnloadAsync(IGameContentHandle content);
@@ -40,7 +41,8 @@ namespace ZArch.GameModules {
         Task<GameModuleSession> EnterAsync(
             string gameId,
             GameEnterContext context = null,
-            CancellationToken cancellationToken = default
+            CancellationToken cancellationToken = default,
+            string packageName = ""
         );
 
         Task ExitAsync();

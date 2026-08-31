@@ -13,6 +13,7 @@ namespace ZArch.GameModules.Unity {
     /// </summary>
     public interface IGameSceneHandle {
         Scene Scene { get; }
+        string PackageName { get; }
     }
 
     /// <summary>
@@ -21,7 +22,7 @@ namespace ZArch.GameModules.Unity {
     public interface IGameSceneProvider {
         string Id { get; }
 
-        Task<IGameSceneHandle> LoadAsync(string location, CancellationToken cancellationToken);
+        Task<IGameSceneHandle> LoadAsync(string location, CancellationToken cancellationToken, string packageName);
 
         Task UnloadAsync(IGameSceneHandle handle);
     }

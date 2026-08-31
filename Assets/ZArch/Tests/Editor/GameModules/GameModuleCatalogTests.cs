@@ -105,7 +105,8 @@ namespace ZArch.Tests.Editor {
                         module,
                         scope,
                         GameEnterContext.Empty,
-                        CancellationToken.None
+                        CancellationToken.None,
+                        ""
                     )
                 );
 
@@ -133,7 +134,8 @@ namespace ZArch.Tests.Editor {
                         module,
                         scope,
                         GameEnterContext.Empty,
-                        CancellationToken.None
+                        CancellationToken.None,
+                        ""
                     )
                 );
 
@@ -186,6 +188,7 @@ namespace ZArch.Tests.Editor {
         private sealed class FakeSceneProvider : IGameSceneProvider {
             private sealed class FakeSceneHandle : IGameSceneHandle {
                 public Scene Scene => default;
+                public string PackageName => null;
             }
 
             public string Id { get; }
@@ -199,7 +202,8 @@ namespace ZArch.Tests.Editor {
 
             public Task<IGameSceneHandle> LoadAsync(
                 string location,
-                CancellationToken cancellationToken
+                CancellationToken cancellationToken,
+                string packageName
             ) {
                 LoadedLocations.Add(location);
                 return Task.FromResult<IGameSceneHandle>(new FakeSceneHandle());

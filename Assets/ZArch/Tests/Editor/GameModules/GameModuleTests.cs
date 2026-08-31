@@ -224,7 +224,8 @@ namespace ZArch.Tests.Editor {
                 IGameModule module,
                 ArchitectureScope scope,
                 GameEnterContext context,
-                CancellationToken cancellationToken
+                CancellationToken cancellationToken,
+                string packageName
             ) {
                 LoadedScopes.Add(scope);
 

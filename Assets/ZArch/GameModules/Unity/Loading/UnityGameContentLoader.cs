@@ -43,7 +43,8 @@ namespace ZArch.GameModules.Unity {
             IGameModule module,
             ArchitectureScope scope,
             GameEnterContext context,
-            CancellationToken cancellationToken
+            CancellationToken cancellationToken,
+            string packageName
         ) {
             if (module is not IUnityGameModule unityModule) {
                 throw new ArgumentException(
@@ -76,7 +77,7 @@ namespace ZArch.GameModules.Unity {
             cancellationToken.ThrowIfCancellationRequested();
 
             var sceneHandle = await provider
-                                    .LoadAsync(location, cancellationToken)
+                                    .LoadAsync(location, cancellationToken, packageName)
                                     .ConfigureAwait(true);
 
             if (sceneHandle == null) {
