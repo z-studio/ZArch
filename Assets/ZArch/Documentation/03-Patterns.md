@@ -6,10 +6,10 @@ Patterns 是可选策略层，提供 Model、System、Utility、Controller、Com
 
 | 角色 | 主要职责 | 可用能力 |
 |---|---|---|
-| Model | 保存数据和数据操作 | Utility、发布 Architecture 范围事件 |
-| System | 实现共享规则 | Model、System、Utility、Architecture 范围事件 |
-| Controller | 连接输入和表现 | Model、System、Utility、Command、Query、Architecture 范围事件 |
-| Command | 执行一次操作 | Model、System、Utility、Command、Query、Architecture 范围事件 |
+| Model | 保存数据和数据操作 | Utility、发布默认事件 |
+| System | 实现共享规则 | Model、System、Utility、订阅/发布默认事件 |
+| Controller | 连接输入和表现 | Model、System、Utility、Command、Query、订阅默认事件 |
+| Command | 执行一次操作 | Model、System、Utility、Command、Query、发布默认事件 |
 | Query | 读取一次结果 | Model、System、Query |
 | Utility | 基础设施 | 不获得架构能力 |
 
@@ -163,19 +163,68 @@ private readonly BindableProperty<int> m_Hp = new(100);
 public IReadOnlyBindableProperty<int> Hp => m_Hp;
 ```
 
-## 8. Event 与 BindableProperty 的选择
+## 8. 默认 Event 与 Scoped Event
+
+Patterns 把 Architecture 范围事件作为默认事件。通常直接使用：
+
+```csharp
+this.SubscribeEvent<PlayerLoggedInEvent>(OnLoggedIn)
+    .AddToUnregisterList(this);
+
+this.PublishEvent(new PlayerLoggedInEvent());
+```
+
+默认事件可以跨越 LobbyScope、GameScope 等 Scope 边界，但仍然只存在于当前 Architecture 内。
+
+需要模块内部隔离时使用 Scoped Event：
+
+```csharp
+this.SubscribeScopedEvent<CardSelectedEvent>(OnCardSelected);
+this.PublishScopedEvent(new CardSelectedEvent());
+```
+
+需要向父 Scope 汇报：
+
+```csharp
+this.PublishScopedEvent(
+    new GameExitedEvent(),
+    EEventPropagation.Bubble
+);
+```
+
+`PublishScopedEvent` 默认只通知调用者所属 Scope；`Bubble` 只向祖先传播，不会向子 Scope、兄弟 Scope 或默认事件总线传播。
+
+直接调用 Core API 时，接收者已经说明事件边界：
+
+```csharp
+architecture.Publish(new PlayerLoggedInEvent()); // 默认事件
+battleScope.Publish(new CardSelectedEvent());    // Scoped Event
+```
+
+### 选择规则
+
+| 情况 | 推荐 API |
+| --- | --- |
+| 不确定应该选哪个 | `PublishEvent` |
+| 跨大厅、游戏、场景通知 | `PublishEvent` |
+| 只允许当前游戏模块收到 | `PublishScopedEvent` |
+| 子 Scope 向父 Scope 汇报 | `PublishScopedEvent(..., Bubble)` |
+
+不要用 `AppScope.Publish(...)` 模拟默认事件；它只发布到 AppScope 自己，并不会通知子 Scope。
+
+## 9. Event 与 BindableProperty 的选择
 
 - “玩家当前血量”：BindableProperty。
 - “玩家刚刚死亡”：Event。
 - 状态需要新订阅者立即显示：BindableProperty。
 - 消息只代表一次已经发生的事实：Event。
 
-## 9. 自动管理订阅
+## 10. 自动管理订阅
 
 Model/System：
 
 ```csharp
-this.SubscribeToArchitectureEvent<PlayerLoggedInEvent>(OnLoggedIn)
+this.SubscribeEvent<PlayerLoggedInEvent>(OnLoggedIn)
     .AddToUnregisterList(this);
 ```
 
@@ -185,5 +234,7 @@ Controller：
 model.Hp.SubscribeAndInvoke(UpdateHp)
     .UnregisterWhenGameObjectDestroyed(gameObject);
 ```
+
+Scoped Event 的订阅会在所属 Scope Dispose 时自动解除；如果需要在 Scope 结束前停止监听，保存返回的 `IUnregister` 并主动调用 `Unregister()`。
 
 下一篇：[Unity 集成](04-Unity.md)。

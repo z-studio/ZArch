@@ -4,7 +4,7 @@ namespace ZArch {
                                 ICanGetSystem,
                                 ICanGetModel,
                                 ICanGetUtility,
-                                ICanPublishArchitectureEvents,
+                                ICanPublishEvents,
                                 ICanSendCommand,
                                 ICanSendQuery {
         void Execute();
@@ -15,7 +15,7 @@ namespace ZArch {
                                          ICanGetSystem,
                                          ICanGetModel,
                                          ICanGetUtility,
-                                         ICanPublishArchitectureEvents,
+                                         ICanPublishEvents,
                                          ICanSendCommand,
                                          ICanSendQuery {
         TResult Execute();

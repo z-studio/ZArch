@@ -621,7 +621,7 @@ namespace ZArch.Tests.Editor {
 
         private sealed class EventSenderSystem : AbstractSystem {
             protected override void OnInit() { }
-            public void Raise() => this.PublishArchitectureEvent(new ProbeEvent());
+            public void Raise() => this.PublishEvent(new ProbeEvent());
         }
 
         private sealed class DeinitializableOnlyService : IDeinitializable {

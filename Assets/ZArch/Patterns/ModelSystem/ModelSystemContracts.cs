@@ -4,7 +4,7 @@ namespace ZArch {
     public interface IModel : IBelongToScope,
                               ICanSetScope,
                               ICanGetUtility,
-                              ICanPublishArchitectureEvents,
+                              ICanPublishEvents,
                               IInitializable,
                               IDeinitializable { }
 
@@ -12,8 +12,8 @@ namespace ZArch {
                                ICanSetScope,
                                ICanGetModel,
                                ICanGetUtility,
-                               ICanSubscribeToArchitectureEvents,
-                               ICanPublishArchitectureEvents,
+                               ICanSubscribeToEvents,
+                               ICanPublishEvents,
                                ICanGetSystem,
                                IInitializable,
                                IDeinitializable { }
@@ -22,7 +22,7 @@ namespace ZArch {
                                    ICanSendCommand,
                                    ICanGetSystem,
                                    ICanGetModel,
-                                   ICanSubscribeToArchitectureEvents,
+                                   ICanSubscribeToEvents,
                                    ICanSendQuery,
                                    ICanGetUtility { }
 }

@@ -46,7 +46,7 @@ public sealed class PlayerPanel : ArchitectureController {
     public void Initialize(ArchitectureScope scope) {
         BindScope(scope);
 
-        this.SubscribeToArchitectureEvent<PlayerChangedEvent>(Refresh)
+        this.SubscribeEvent<PlayerChangedEvent>(Refresh)
             .UnregisterWhenGameObjectDestroyed(gameObject);
 
         Refresh(default);
@@ -79,13 +79,13 @@ public sealed class SceneEntry : MonoBehaviour {
 ZArch 为 `IUnregister` 提供了 Unity 生命周期扩展：
 
 ```csharp
-this.SubscribeToArchitectureEvent<PlayerChangedEvent>(Refresh)
+this.SubscribeEvent<PlayerChangedEvent>(Refresh)
     .UnregisterWhenGameObjectDestroyed(gameObject);
 
-this.SubscribeToArchitectureEvent<PanelRefreshEvent>(RefreshPanel)
+this.SubscribeEvent<PanelRefreshEvent>(RefreshPanel)
     .UnregisterWhenDisabled(this);
 
-this.SubscribeToArchitectureEvent<SceneStateChangedEvent>(OnSceneStateChanged)
+this.SubscribeEvent<SceneStateChangedEvent>(OnSceneStateChanged)
     .UnregisterWhenGameObjectSceneUnloaded(gameObject);
 ```
 
@@ -98,6 +98,15 @@ this.SubscribeToArchitectureEvent<SceneStateChangedEvent>(OnSceneStateChanged)
 | `UnregisterWhenGameObjectSceneUnloaded` | 对象所属场景卸载 | Additive Scene 中的对象 |
 
 `OnEnable` 中注册的监听通常配合 `UnregisterWhenDisabled`，并在每次重新启用时重新注册；只在初始化时注册一次的监听通常配合销毁或场景卸载。
+
+`SubscribeEvent` 监听默认的 Architecture 范围事件。如果组件只应接收所属场景或模块 Scope 的消息，改用：
+
+```csharp
+this.SubscribeScopedEvent<SelectionChangedEvent>(RefreshSelection)
+    .UnregisterWhenGameObjectDestroyed(gameObject);
+```
+
+Scope Dispose 会自动解除 Scoped Event 订阅；Unity 自动注销仍然有价值，因为 GameObject 可能早于 Scope 被销毁或禁用。
 
 ## 4. 场景 Scope
 

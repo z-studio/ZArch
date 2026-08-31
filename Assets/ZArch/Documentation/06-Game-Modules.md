@@ -124,7 +124,39 @@ public sealed class BattleModuleSceneEntry : GameModuleSceneEntry {
 
 这样场景对象不会自行搜索全局 Bootstrap，也不会误用根 Scope。
 
-## 6. 退出策略
+## 6. 模块事件边界
+
+GameModule 的 Scope 天然适合作为 Scoped Event 边界：
+
+```csharp
+// 只在当前游戏模块内部通知。
+this.PublishScopedEvent(new RoundEndedEvent());
+
+// 通知整个应用，例如玩家资产或登录状态发生变化。
+this.PublishEvent(new PlayerBalanceChangedEvent());
+```
+
+子 Scope 需要向模块根 Scope 或 AppScope 汇报时可以冒泡：
+
+```csharp
+this.PublishScopedEvent(
+    new SubGameExitedEvent(),
+    EEventPropagation.Bubble
+);
+```
+
+不要让 AppScope 通过 `Publish` 向游戏模块广播；父 Scope 的 Scoped Event 不会向子 Scope 传播。大厅和游戏都需要接收的消息应使用默认 `PublishEvent`。
+
+推荐边界：
+
+| 消息 | 事件空间 |
+| --- | --- |
+| 玩家资料、货币、登录状态 | 默认事件 |
+| 当前游戏的回合、选牌、局部表现 | Scoped Event |
+| 子玩法向模块上层汇报 | Scoped Event + `Bubble` |
+| 当前值与 UI 展示状态 | 模块 Model 中的 `BindableProperty` |
+
+## 7. 退出策略
 
 应用退出或测试结束时调用：
 
@@ -134,7 +166,7 @@ await launcher.ShutdownAsync();
 
 `ShutdownAsync` 会结束当前模块并阻止后续进入。Launcher 实现了 `IAsyncDeinitializable`；使用 `Architecture.ShutdownAsync()` 时框架会等待它完成。Unity 项目仍应在销毁 Bootstrap 前显式等待整个关闭流程。
 
-## 7. 何时使用 GameModules
+## 8. 何时使用 GameModules
 
 适合：
 

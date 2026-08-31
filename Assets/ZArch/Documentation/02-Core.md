@@ -212,9 +212,21 @@ await architecture.ShutdownAsync(cancellationToken);
 
 同步 `Dispose` 遇到仅支持异步清理的服务会报告错误。清理过程仍会继续处理其余服务，最后将异常交给 `UnhandledExceptionHandler`；没有设置处理器时向调用方抛出。
 
-## 6. Architecture 范围事件与作用域事件
+## 6. 默认事件与 Scoped Event
 
-Architecture 范围事件在单个 Architecture 内广播。Architecture 实例已经表达事件边界，因此直接 API 统一使用 `Subscribe / Unsubscribe / Publish`：
+Core 内部保留两套相互隔离的事件空间：Architecture Event Bus 和每个 Scope 自己的 Event Bus。它们使用相同的 `Subscribe / Unsubscribe / Publish` 动词，但接收者不同。
+
+| 发布方式 | 谁能收到 | 是否跨 Scope |
+| --- | --- | --- |
+| `architecture.Publish(message)` | 订阅同一个 Architecture 的处理器 | 是 |
+| `scope.Publish(message)` | 只订阅当前 Scope 的处理器 | 否 |
+| `scope.Publish(message, Bubble)` | 当前 Scope 和所有祖先 Scope 的处理器 | 只向上 |
+
+Patterns 层把 Architecture Event 作为默认事件，因此业务代码使用更短的 `SubscribeEvent / PublishEvent`；需要局部隔离时才显式使用 `ScopedEvent`。
+
+### 6.1 默认事件：Architecture 范围广播
+
+Architecture Event 在单个 Architecture 内广播，不关心订阅者属于哪棵 Scope 树：
 
 ```csharp
 var unregister = architecture.Subscribe<PlayerLoggedInEvent>(OnLoggedIn);
@@ -222,20 +234,67 @@ architecture.Publish(new PlayerLoggedInEvent());
 unregister.Unregister();
 ```
 
-作用域事件默认只发布到当前 Scope：
+一个进程可以有多个 Architecture，它们的默认事件仍然彼此隔离。Architecture Event 不会自动进入任何 Scope Event Bus。
+
+### 6.2 Scoped Event：当前 Scope 内部通知
+
+Scope Event 默认只发布到当前 Scope：
 
 ```csharp
-scope.Subscribe<DamageEvent>(OnDamage);
-scope.Publish(new DamageEvent());
+var unregister = battleScope.Subscribe<CardSelectedEvent>(OnCardSelected);
+battleScope.Publish(new CardSelectedEvent());
 ```
 
-向祖先 Scope 冒泡：
+子 Scope 的订阅者不会收到父 Scope 发布的消息。Scoped Event 没有向下广播语义：
 
 ```csharp
-scope.Publish(damage, EEventPropagation.Bubble);
+appScope.Publish(new RefreshEvent());
+
+// LobbyScope 和 BattleScope 都不会因为是 AppScope 的子级而收到。
 ```
 
-`Bubble` 的传播顺序是“当前 Scope → Parent → 更上层祖先”。作用域事件不会自动进入 Architecture 范围事件。事件处理器发生异常时，ZArch 会继续调用其余处理器，最后向发布方抛出 `AggregateException`。
+因此 `AppScope.Publish(...)` 不等于 `architecture.Publish(...)`，也不应被当作全局事件入口。
+
+### 6.3 向祖先 Scope 冒泡
+
+需要让局部消息逐级通知父 Scope 时使用 `Bubble`：
+
+```csharp
+battleScope.Publish(
+    new GameExitedEvent(),
+    EEventPropagation.Bubble
+);
+```
+
+传播顺序为：
+
+```text
+当前 Scope → Parent → 更上层祖先
+```
+
+`Bubble` 仍然不会进入 Architecture Event Bus，也不会通知当前 Scope 的子级或兄弟 Scope。
+
+### 6.4 如何选择
+
+| 需求 | 选择 |
+| --- | --- |
+| 登录状态、玩家资料、跨模块刷新 | 默认事件 |
+| 大厅与当前游戏都需要接收 | 默认事件 |
+| 战斗内部选牌、回合、局部动画消息 | Scoped Event |
+| 子玩法向 GameScope 或 AppScope 汇报 | Scoped Event + `Bubble` |
+| 持续存在的状态 | `BindableProperty`，不是 Event |
+
+业务代码应优先选择默认事件。只有事件确实需要 Scope 隔离或父链传播时，才选择 Scoped Event。不要让同一个事件类型同时出现在两套总线上，否则发布代码看似正确，订阅者却可能永远收不到。
+
+### 6.5 订阅生命周期与异常
+
+`Architecture.Subscribe` 返回的订阅不会因为某个 Scope Dispose 而自动解除，调用方必须保存 `IUnregister`，或交给 Model/System、Unity 生命周期扩展管理。
+
+`ArchitectureScope.Subscribe` 会被当前 Scope 跟踪，Scope Dispose 时自动解除；返回的 `IUnregister` 仍可用于提前取消订阅。
+
+事件处理器发生异常时，ZArch 会继续调用同一发布路径上的其余处理器，最后向发布方抛出包含全部错误的 `AggregateException`。
+
+### 6.6 Signal 与 Event Bus
 
 `Core/Events` 中的 `Signal<T>` 是无路由的本地通知原语，使用 `Subscribe / Unsubscribe / Emit`；`TypeEventBus` 是 Architecture 和 Scope 内部按消息类型路由的实现。业务层通常只需要使用 Architecture、Scope 或 `BindableProperty`，不必直接依赖内部 EventBus。
 

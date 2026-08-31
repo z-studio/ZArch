@@ -110,7 +110,7 @@ ArchitectureScope.Debug.cs
 - Scoped Factory、无所有权 Transient、Owned Transient、Alias 与循环 Factory；
 - 初始化顺序、同步/异步逆序释放、清理异常聚合与失败回滚；
 - 异步成功、取消、超时以及初始化/关闭竞态；
-- Architecture 范围事件、作用域事件、冒泡和订阅异常；
+- 默认事件、Scoped Event、父链冒泡、Scope 自动注销和订阅异常；
 - BindableProperty 比较、立即回调和注销；
 - Scene Scope 的创建与卸载；
 - GameModuleLauncher 进入、退出、重复切换和加载失败回滚。

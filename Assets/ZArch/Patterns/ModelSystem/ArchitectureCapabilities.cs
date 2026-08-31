@@ -2,8 +2,8 @@ namespace ZArch {
     public interface ICanGetModel : IBelongToScope { }
     public interface ICanGetSystem : IBelongToScope { }
     public interface ICanGetUtility : IBelongToScope { }
-    public interface ICanSubscribeToArchitectureEvents : IBelongToScope { }
-    public interface ICanPublishArchitectureEvents : IBelongToScope { }
+    public interface ICanSubscribeToEvents : IBelongToScope { }
+    public interface ICanPublishEvents : IBelongToScope { }
     public interface ICanSendCommand : IBelongToScope { }
     public interface ICanSendQuery : IBelongToScope { }
 
@@ -15,31 +15,31 @@ namespace ZArch {
         public static T GetUtility<T>(this ICanGetUtility self) where T : class, IUtility =>
             self.GetScope().Resolve<T>();
 
-        public static IUnregister SubscribeToArchitectureEvent<T>(
-            this ICanSubscribeToArchitectureEvents self,
+        public static IUnregister SubscribeEvent<T>(
+            this ICanSubscribeToEvents self,
             System.Action<T> onEvent
         ) =>
             self.GetScope().Architecture.Subscribe(onEvent);
 
-        public static void UnsubscribeFromArchitectureEvent<T>(
-            this ICanSubscribeToArchitectureEvents self,
+        public static void UnsubscribeEvent<T>(
+            this ICanSubscribeToEvents self,
             System.Action<T> onEvent
         ) =>
             self.GetScope().Architecture.Unsubscribe(onEvent);
 
-        public static void PublishArchitectureEvent<T>(this ICanPublishArchitectureEvents self) where T : new() =>
+        public static void PublishEvent<T>(this ICanPublishEvents self) where T : new() =>
             self.GetScope().Architecture.Publish<T>();
 
-        public static void PublishArchitectureEvent<T>(this ICanPublishArchitectureEvents self, T message) =>
+        public static void PublishEvent<T>(this ICanPublishEvents self, T message) =>
             self.GetScope().Architecture.Publish(message);
 
-        public static IUnregister SubscribeToScopeEvent<T>(this IBelongToScope self, System.Action<T> onEvent) =>
+        public static IUnregister SubscribeScopedEvent<T>(this IBelongToScope self, System.Action<T> onEvent) =>
             self.GetScope().Subscribe(onEvent);
 
-        public static void UnsubscribeFromScopeEvent<T>(this IBelongToScope self, System.Action<T> onEvent) =>
+        public static void UnsubscribeScopedEvent<T>(this IBelongToScope self, System.Action<T> onEvent) =>
             self.GetScope().Unsubscribe(onEvent);
 
-        public static void PublishScopeEvent<T>(
+        public static void PublishScopedEvent<T>(
             this IBelongToScope self,
             T message,
             EEventPropagation propagation = EEventPropagation.Local

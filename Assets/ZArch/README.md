@@ -31,7 +31,16 @@ Architecture
 
 Model、System 等能力接口用于表达分层权限：例如 Model 可以访问 Utility，System 可以访问 Model，Controller 可以发送 Command。它们是编译期规则，不要求业务代码手动管理依赖容器。
 
-事件分为两个明确边界：Architecture 范围事件会在单个 Architecture 内广播；作用域事件默认只发布到当前 Scope，也可以通过 `EEventPropagation.Bubble` 逐级冒泡到祖先 Scope。两者不会自动互相转发。
+事件默认发布到整个 Architecture；大多数业务代码只需要 `SubscribeEvent / PublishEvent`。只有需要把消息限制在当前模块，或需要沿 Scope 父链冒泡时，才使用 `SubscribeScopedEvent / PublishScopedEvent`。两套事件不会自动互相转发，AppScope 发布的 Scoped Event 也不会向子 Scope 广播。
+
+```csharp
+// 默认事件：同一 Architecture 内的订阅者都能收到。
+this.PublishEvent(new PlayerChangedEvent());
+
+// Scoped Event：默认只在当前 Scope；Bubble 时再逐级通知祖先 Scope。
+this.PublishScopedEvent(new RoundEndedEvent());
+this.PublishScopedEvent(new GameExitedEvent(), EEventPropagation.Bubble);
+```
 
 ## Unity 快速开始
 
@@ -196,6 +205,8 @@ Core 和 Patterns 均启用 `noEngineReferences`。
 - 修改状态可直接调用 System；需要日志、回放或排队时使用 Command。
 - 组合读取使用 Query，简单属性读取不必包装。
 - 一次性事实使用 Event，持续状态展示使用 BindableProperty。
+- 跨 Scope 通知默认使用 `PublishEvent`；模块内部消息才使用 `PublishScopedEvent`。
+- 不要把 `AppScope.Publish(...)` 当成全局广播，它只发布到 AppScope 本身。
 - 生命周期与场景一致时创建 Child Scope，并在场景或流程结束时 Dispose。
 
 ## 重要约束
