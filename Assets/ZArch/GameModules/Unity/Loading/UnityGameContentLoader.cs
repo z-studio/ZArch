@@ -39,7 +39,16 @@ namespace ZArch.GameModules.Unity {
             }
         }
 
-        public async Task<IGameContentHandle> LoadAsync(
+        public Task<IGameContentHandle> LoadAsync(
+            IGameModule module,
+            ArchitectureScope scope,
+            GameEnterContext context,
+            CancellationToken cancellationToken
+        ) {
+            return LoadWithPackageAsync(module, scope, context, cancellationToken, string.Empty);
+        }
+
+        public async Task<IGameContentHandle> LoadWithPackageAsync(
             IGameModule module,
             ArchitectureScope scope,
             GameEnterContext context,

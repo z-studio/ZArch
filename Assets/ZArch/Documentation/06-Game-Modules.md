@@ -95,9 +95,29 @@ Launcher 同一时间只允许一个切换操作，也只维护一个 Active 模
 2. 创建模块子 Scope，并执行 `Configure` 与生命周期初始化。
 3. 通过内容加载器加载场景。
 4. 将场景入口绑定到模块 Scope。
-5. 成功后公布为当前模块。
+5. 若 Scope 注册了 `IGameModuleLifecycle`，调用 `ActivateAsync`。
+6. 成功后公布为当前模块。
 
 任何一步失败都会卸载已加载内容并释放新 Scope，不会留下半激活模块。
+
+模块若有必须在场景绑定后执行的逻辑（例如打开玩法 UI），应注册运行态服务：
+
+```csharp
+public sealed class BattleRuntime : IGameModuleLifecycle {
+    public Task ActivateAsync(CancellationToken cancellationToken) {
+        // 场景已经加载且 GameModuleSceneEntry 已绑定 Scope。
+        return OpenBattleUiAsync(cancellationToken);
+    }
+
+    public Task DeactivateAsync(CancellationToken cancellationToken) {
+        // 此时场景和模块 Scope 仍然有效。
+        return CloseBattleUiAsync(cancellationToken);
+    }
+}
+```
+
+退出顺序为 `DeactivateAsync → 卸载内容 → DisposeAsync(GameScope)`。停用失败时会保留内容和
+Scope，并进入待清理状态；再次调用 `ExitAsync` 会重试停用阶段。
 
 ## 5. 场景入口
 

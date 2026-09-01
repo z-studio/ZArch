@@ -9,6 +9,15 @@ namespace ZArch.GameModules {
         void Configure(ArchitectureScope scope, GameEnterContext context);
     }
 
+    /// <summary>
+    /// Optional lifecycle phase for a game module. Register one in the game scope when
+    /// work must happen after content is loaded and bound, or before it is unloaded.
+    /// </summary>
+    public interface IGameModuleLifecycle {
+        Task ActivateAsync(CancellationToken cancellationToken);
+        Task DeactivateAsync(CancellationToken cancellationToken);
+    }
+
     public interface IGameContentHandle { }
 
     public interface IGameContentLoader {
@@ -16,8 +25,7 @@ namespace ZArch.GameModules {
             IGameModule module,
             ArchitectureScope scope,
             GameEnterContext context,
-            CancellationToken cancellationToken,
-            string packageName
+            CancellationToken cancellationToken
         );
 
         Task UnloadAsync(IGameContentHandle content);
@@ -42,8 +50,7 @@ namespace ZArch.GameModules {
         Task<GameModuleSession> EnterAsync(
             string gameId,
             GameEnterContext context = null,
-            CancellationToken cancellationToken = default,
-            string packageName = ""
+            CancellationToken cancellationToken = default
         );
 
         Task ExitAsync();

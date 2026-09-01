@@ -65,8 +65,7 @@ namespace ZArch.GameModules {
         public async Task<GameModuleSession> EnterAsync(
             string gameId,
             GameEnterContext context = null,
-            CancellationToken cancellationToken = default,
-            string packageName = ""
+            CancellationToken cancellationToken = default
         ) {
             EnsureUsable();
 
@@ -105,11 +104,21 @@ namespace ZArch.GameModules {
 
                 entering = new GameModuleSession(module, context, scope);
 
-                entering.Content = await m_ContentLoader.LoadAsync(module, scope, context, transitionToken, packageName)
+                entering.Content = await m_ContentLoader.LoadAsync(module, scope, context, transitionToken)
                                                         .ConfigureAwait(true);
 
                 if (entering.Content == null) {
                     throw new InvalidOperationException($"Content loader returned null for game module '{module.Id}'.");
+                }
+
+                if (scope.TryResolve<IGameModuleLifecycle>(out var lifecycle)) {
+                    entering.Lifecycle = lifecycle;
+                    entering.IsLifecycleDeactivated = false;
+                    var activationTask = lifecycle.ActivateAsync(transitionToken)
+                                         ?? throw new InvalidOperationException(
+                                             $"{lifecycle.GetType().FullName}.ActivateAsync returned null."
+                                         );
+                    await activationTask.ConfigureAwait(true);
                 }
 
                 transitionToken.ThrowIfCancellationRequested();
@@ -220,6 +229,20 @@ namespace ZArch.GameModules {
             }
 
             Exception cleanupException = null;
+
+            if (!session.IsLifecycleDeactivated) {
+                try {
+                    var deactivateTask = session.Lifecycle.DeactivateAsync(CancellationToken.None)
+                                         ?? throw new InvalidOperationException(
+                                             $"{session.Lifecycle.GetType().FullName}.DeactivateAsync returned null."
+                                         );
+                    await deactivateTask.ConfigureAwait(true);
+                    session.IsLifecycleDeactivated = true;
+                } catch (Exception exception) {
+                    // Keep content and scope alive so deactivation can be retried safely.
+                    return exception;
+                }
+            }
 
             if (!session.IsContentUnloaded) {
                 if (session.Content == null) {

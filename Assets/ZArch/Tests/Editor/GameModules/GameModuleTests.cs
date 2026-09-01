@@ -89,6 +89,76 @@ namespace ZArch.Tests.Editor {
         }
 
         [Test]
+        public async Task EnterAndExit_DriveLifecycleAroundLoadedContent() {
+            var order = new List<string>();
+            var lifecycle = new FakeLifecycle(order);
+            var module = new FakeModule(
+                "game-a",
+                (scope, _) => scope.Register<IGameModuleLifecycle>(lifecycle)
+            );
+            m_ContentLoader.AfterLoad = () => order.Add("content-loaded");
+            m_ContentLoader.BeforeUnload = () => order.Add("content-unload");
+            var launcher = CreateLauncher(module);
+
+            await launcher.EnterAsync("game-a");
+            await launcher.ExitAsync();
+
+            Assert.That(
+                order,
+                Is.EqualTo(new[] {
+                    "content-loaded",
+                    "lifecycle-activate",
+                    "lifecycle-deactivate",
+                    "content-unload"
+                })
+            );
+        }
+
+        [Test]
+        public void EnterAsync_WhenLifecycleActivationFails_DeactivatesAndRollsBack() {
+            var lifecycle = new FakeLifecycle { FailActivation = true };
+            var module = new FakeModule(
+                "game-a",
+                (scope, _) => scope.Register<IGameModuleLifecycle>(lifecycle)
+            );
+            var launcher = CreateLauncher(module);
+
+            Assert.ThrowsAsync<InvalidOperationException>(async () => await launcher.EnterAsync("game-a"));
+
+            Assert.That(lifecycle.DeactivationCount, Is.EqualTo(1));
+            Assert.That(m_ContentLoader.UnloadedIds, Is.EqualTo(new[] { "game-a" }));
+            Assert.That(launcher.Current, Is.Null);
+            Assert.That(launcher.HasPendingCleanup, Is.False);
+            Assert.That(m_AppRoot.Children, Is.Empty);
+        }
+
+        [Test]
+        public async Task ExitAsync_WhenLifecycleDeactivationFails_PreservesSessionForRetry() {
+            var lifecycle = new FakeLifecycle { FailDeactivation = true };
+            var module = new FakeModule(
+                "game-a",
+                (scope, _) => scope.Register<IGameModuleLifecycle>(lifecycle)
+            );
+            var launcher = CreateLauncher(module);
+            var session = await launcher.EnterAsync("game-a");
+
+            Assert.ThrowsAsync<InvalidOperationException>(async () => await launcher.ExitAsync());
+
+            Assert.That(launcher.Current, Is.Null);
+            Assert.That(launcher.HasPendingCleanup, Is.True);
+            Assert.That(session.Scope.IsDisposed, Is.False);
+            Assert.That(m_ContentLoader.UnloadedIds, Is.Empty);
+
+            lifecycle.FailDeactivation = false;
+            await launcher.ExitAsync();
+
+            Assert.That(lifecycle.DeactivationCount, Is.EqualTo(2));
+            Assert.That(launcher.HasPendingCleanup, Is.False);
+            Assert.That(session.Scope.IsDisposed, Is.True);
+            Assert.That(m_ContentLoader.UnloadedIds, Is.EqualTo(new[] { "game-a" }));
+        }
+
+        [Test]
         public void EnterAsync_WhenCancelledBeforeCreation_DoesNotCreateSession() {
             var launcher = CreateLauncher(new FakeModule("game-a"));
             using var cancellation = new CancellationTokenSource();
@@ -254,14 +324,14 @@ namespace ZArch.Tests.Editor {
 
             public TaskCompletionSource<bool> LoadGate { get; set; }
             public Action AfterLoad { get; set; }
+            public Action BeforeUnload { get; set; }
             public bool FailUnloading { get; set; }
 
             public async Task<IGameContentHandle> LoadAsync(
                 IGameModule module,
                 ArchitectureScope scope,
                 GameEnterContext context,
-                CancellationToken cancellationToken,
-                string packageName
+                CancellationToken cancellationToken
             ) {
                 LoadedScopes.Add(scope);
 
@@ -281,6 +351,7 @@ namespace ZArch.Tests.Editor {
 
             public Task UnloadAsync(IGameContentHandle content) {
                 var handle = (FakeContentHandle)content;
+                BeforeUnload?.Invoke();
                 UnloadedIds.Add(handle.GameId);
 
                 if (FailUnloading) {
@@ -296,6 +367,41 @@ namespace ZArch.Tests.Editor {
 
             public ModuleService(string value) {
                 Value = value;
+            }
+        }
+
+        private sealed class FakeLifecycle : IGameModuleLifecycle {
+            private readonly List<string> m_Order;
+
+            public bool FailActivation { get; set; }
+            public bool FailDeactivation { get; set; }
+            public int DeactivationCount { get; private set; }
+
+            public FakeLifecycle(List<string> order = null) {
+                m_Order = order;
+            }
+
+            public Task ActivateAsync(CancellationToken cancellationToken) {
+                cancellationToken.ThrowIfCancellationRequested();
+                m_Order?.Add("lifecycle-activate");
+
+                if (FailActivation) {
+                    throw new InvalidOperationException("Lifecycle activation failed.");
+                }
+
+                return Task.CompletedTask;
+            }
+
+            public Task DeactivateAsync(CancellationToken cancellationToken) {
+                cancellationToken.ThrowIfCancellationRequested();
+                DeactivationCount++;
+                m_Order?.Add("lifecycle-deactivate");
+
+                if (FailDeactivation) {
+                    throw new InvalidOperationException("Lifecycle deactivation failed.");
+                }
+
+                return Task.CompletedTask;
             }
         }
 

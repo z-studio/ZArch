@@ -105,8 +105,7 @@ namespace ZArch.Tests.Editor {
                         module,
                         scope,
                         GameEnterContext.Empty,
-                        CancellationToken.None,
-                        ""
+                        CancellationToken.None
                     )
                 );
 
@@ -134,8 +133,7 @@ namespace ZArch.Tests.Editor {
                         module,
                         scope,
                         GameEnterContext.Empty,
-                        CancellationToken.None,
-                        ""
+                        CancellationToken.None
                     )
                 );
 
