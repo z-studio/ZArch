@@ -2,6 +2,8 @@ using System.Collections.Generic;
 
 namespace ZArch {
     public sealed partial class ArchitectureScope {
+        internal IReadOnlyList<EventSubscriptionDebugInfo> GetEventDebugInfo() => m_Events.GetDebugInfo();
+
         internal IReadOnlyList<ServiceDebugInfo> GetServiceDebugInfo() {
             var result = new List<ServiceDebugInfo>(m_RegistrationOrder.Count);
 
@@ -13,7 +15,8 @@ namespace ZArch {
                         Lifetime = registration.Lifetime,
                         IsCreated = registration.Instance != null,
                         IsInitialized = registration.IsInitialized,
-                        IsOwned = registration.Owned
+                        IsOwned = registration.Owned,
+                        IsBinding = registration.IsBinding
                     }
                 );
             }

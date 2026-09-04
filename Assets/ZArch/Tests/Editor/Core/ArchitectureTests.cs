@@ -120,11 +120,11 @@ namespace ZArch.Tests.Editor {
         }
 
         [Test]
-        public void RegisterExternal_DoesNotBindInitializeOrDisposeExternalInstance() {
+        public void Bind_DoesNotInitializeOrDisposeExternalInstance() {
             var external = new ExternalLifecycleService();
             var scope = m_Architecture.CreateRootScope(
                 "External",
-                configured => configured.RegisterExternal(external)
+                configured => configured.Bind(external)
             );
 
             Assert.That(scope.Resolve<ExternalLifecycleService>(), Is.SameAs(external));
@@ -135,6 +135,34 @@ namespace ZArch.Tests.Editor {
 
             Assert.That(external.DeinitializeCount, Is.Zero);
             Assert.That(external.DisposeCount, Is.Zero);
+        }
+
+        [Test]
+        public void Bind_ActiveScopeMakesExternalInstanceResolvableUntilHandleIsDisposed() {
+            var scope = m_Architecture.CreateRootScope("RuntimeBinding", _ => { });
+            var external = new ExternalLifecycleService();
+
+            IDisposable binding = scope.Bind(external);
+
+            Assert.That(scope.Resolve<ExternalLifecycleService>(), Is.SameAs(external));
+            Assert.That(external.SetScopeCount, Is.Zero);
+            Assert.That(external.InitializeCount, Is.Zero);
+
+            binding.Dispose();
+
+            Assert.That(scope.TryResolve<ExternalLifecycleService>(out _), Is.False);
+            Assert.That(external.DeinitializeCount, Is.Zero);
+            Assert.That(external.DisposeCount, Is.Zero);
+        }
+
+        [Test]
+        public void Bind_RejectsTypeAlreadyRegisteredInSameScope() {
+            var scope = m_Architecture.CreateRootScope(
+                "BindingConflict",
+                configured => configured.Register(new PlainService("registered"))
+            );
+
+            Assert.Throws<InvalidOperationException>(() => scope.Bind(new PlainService("external")));
         }
 
         [Test]
@@ -243,6 +271,38 @@ namespace ZArch.Tests.Editor {
             root.Publish(new ProbeEvent());
 
             Assert.That(calls, Is.Zero);
+        }
+
+        [Test]
+        public void EventDebugInfo_SeparatesArchitectureAndScopedSubscriptions() {
+            var root = m_Architecture.CreateRootScope("Root", _ => { });
+            Action<ProbeEvent> architectureHandler = _ => { };
+            Action<ProbeEvent> scopedHandler = _ => { };
+
+            m_Architecture.Subscribe(architectureHandler);
+            root.Subscribe(scopedHandler);
+
+            var architectureEvents = m_Architecture.GetEventDebugInfo();
+            var scopedEvents = root.GetEventDebugInfo();
+            Assert.That(architectureEvents, Has.Count.EqualTo(1));
+            Assert.That(architectureEvents[0].EventType, Is.EqualTo(typeof(ProbeEvent)));
+            Assert.That(architectureEvents[0].Subscribers, Is.EqualTo(new Delegate[] { architectureHandler }));
+            Assert.That(scopedEvents, Has.Count.EqualTo(1));
+            Assert.That(scopedEvents[0].EventType, Is.EqualTo(typeof(ProbeEvent)));
+            Assert.That(scopedEvents[0].Subscribers, Is.EqualTo(new Delegate[] { scopedHandler }));
+        }
+
+        [Test]
+        public void EventDebugInfo_RemovesSubscriptionsWhenScopeIsDisposed() {
+            var root = m_Architecture.CreateRootScope("Root", _ => { });
+            Action<ProbeEvent> handler = _ => { };
+            root.SubscribeArchitectureEvent(handler);
+            root.Subscribe(handler);
+
+            root.Dispose();
+
+            Assert.That(m_Architecture.GetEventDebugInfo(), Is.Empty);
+            Assert.That(root.GetEventDebugInfo(), Is.Empty);
         }
 
         [Test]

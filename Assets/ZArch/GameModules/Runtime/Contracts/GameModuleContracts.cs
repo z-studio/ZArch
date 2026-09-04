@@ -6,16 +6,29 @@ using System.Threading.Tasks;
 namespace ZArch.GameModules {
     public interface IGameModule {
         string Id { get; }
-        void Configure(ArchitectureScope scope, GameEnterContext context);
+        IGameModuleRuntime Configure(ArchitectureScope scope, GameEnterContext gameEnterContext);
     }
 
     /// <summary>
-    /// Optional lifecycle phase for a game module. Register one in the game scope when
-    /// work must happen after content is loaded and bound, or before it is unloaded.
+    /// Per-session runtime returned by <see cref="IGameModule.Configure"/>.
+    /// Enter runs after content is loaded and bound; Exit runs before content is unloaded.
     /// </summary>
-    public interface IGameModuleLifecycle {
-        Task ActivateAsync(CancellationToken cancellationToken);
-        Task DeactivateAsync(CancellationToken cancellationToken);
+    public interface IGameModuleRuntime {
+        Task EnterAsync(CancellationToken cancellationToken);
+        Task ExitAsync();
+    }
+
+    public static class GameModuleRuntime {
+        private sealed class EmptyRuntime : IGameModuleRuntime {
+            public Task EnterAsync(CancellationToken cancellationToken) {
+                cancellationToken.ThrowIfCancellationRequested();
+                return Task.CompletedTask;
+            }
+
+            public Task ExitAsync() => Task.CompletedTask;
+        }
+
+        public static IGameModuleRuntime Empty { get; } = new EmptyRuntime();
     }
 
     public interface IGameContentHandle { }
@@ -31,18 +44,9 @@ namespace ZArch.GameModules {
         Task UnloadAsync(IGameContentHandle content);
     }
 
-    public interface IGameScopeFactory {
-        Task<ArchitectureScope> CreateAsync(
-            IGameModule module,
-            GameEnterContext context,
-            CancellationToken cancellationToken
-        );
-    }
-
-    public interface IGameModuleLauncher {
+    public interface IGameModuleHost {
         GameModuleSession Current { get; }
         bool IsTransitioning { get; }
-        bool HasPendingCleanup { get; }
         IReadOnlyCollection<IGameModule> Modules { get; }
 
         bool TryGetModule(string gameId, out IGameModule module);

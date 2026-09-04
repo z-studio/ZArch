@@ -5,11 +5,8 @@ using System.Threading;
 using System.Threading.Tasks;
 
 namespace ZArch.GameModules {
-    public sealed class GameModuleLauncher :
-        IGameModuleLauncher,
-        IAsyncDeinitializable,
-        IDeinitializable {
-        private readonly IGameScopeFactory m_ScopeFactory;
+    public sealed class GameModuleHost : IGameModuleHost, IAsyncDeinitializable, IDeinitializable {
+        private readonly GameScopeFactory m_ScopeFactory;
         private readonly IGameContentLoader m_ContentLoader;
         private readonly Dictionary<string, IGameModule> m_Modules = new(StringComparer.Ordinal);
         private readonly CancellationTokenSource m_LifetimeCts = new();
@@ -21,15 +18,17 @@ namespace ZArch.GameModules {
 
         public GameModuleSession Current { get; private set; }
         public bool IsTransitioning { get; private set; }
-        public bool HasPendingCleanup => m_PendingCleanup != null;
+        private bool HasPendingCleanup => m_PendingCleanup != null;
         public IReadOnlyCollection<IGameModule> Modules { get; }
 
-        public GameModuleLauncher(
-            IGameScopeFactory scopeFactory,
+        public GameModuleHost(
+            ArchitectureScope parentScope,
             IGameContentLoader contentLoader,
             IEnumerable<IGameModule> modules
         ) {
-            m_ScopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
+            m_ScopeFactory = new GameScopeFactory(
+                parentScope ?? throw new ArgumentNullException(nameof(parentScope))
+            );
             m_ContentLoader = contentLoader ?? throw new ArgumentNullException(nameof(contentLoader));
 
             if (modules == null) {
@@ -100,9 +99,10 @@ namespace ZArch.GameModules {
                 var transitionToken = linkedCts.Token;
                 transitionToken.ThrowIfCancellationRequested();
 
-                var scope = await m_ScopeFactory.CreateAsync(module, context, transitionToken).ConfigureAwait(true);
+                var creation = await m_ScopeFactory.CreateAsync(module, context, transitionToken).ConfigureAwait(true);
+                var scope = creation.Scope;
 
-                entering = new GameModuleSession(module, context, scope);
+                entering = new GameModuleSession(module, context, scope, creation.Runtime);
 
                 entering.Content = await m_ContentLoader.LoadAsync(module, scope, context, transitionToken)
                                                         .ConfigureAwait(true);
@@ -111,15 +111,12 @@ namespace ZArch.GameModules {
                     throw new InvalidOperationException($"Content loader returned null for game module '{module.Id}'.");
                 }
 
-                if (scope.TryResolve<IGameModuleLifecycle>(out var lifecycle)) {
-                    entering.Lifecycle = lifecycle;
-                    entering.IsLifecycleDeactivated = false;
-                    var activationTask = lifecycle.ActivateAsync(transitionToken)
-                                         ?? throw new InvalidOperationException(
-                                             $"{lifecycle.GetType().FullName}.ActivateAsync returned null."
-                                         );
-                    await activationTask.ConfigureAwait(true);
-                }
+                entering.IsRuntimeExited = false;
+                var enterTask = entering.Runtime.EnterAsync(transitionToken)
+                                ?? throw new InvalidOperationException(
+                                    $"{entering.Runtime.GetType().FullName}.EnterAsync returned null."
+                                );
+                await enterTask.ConfigureAwait(true);
 
                 transitionToken.ThrowIfCancellationRequested();
                 Current = entering;
@@ -230,16 +227,16 @@ namespace ZArch.GameModules {
 
             Exception cleanupException = null;
 
-            if (!session.IsLifecycleDeactivated) {
+            if (!session.IsRuntimeExited) {
                 try {
-                    var deactivateTask = session.Lifecycle.DeactivateAsync(CancellationToken.None)
-                                         ?? throw new InvalidOperationException(
-                                             $"{session.Lifecycle.GetType().FullName}.DeactivateAsync returned null."
-                                         );
-                    await deactivateTask.ConfigureAwait(true);
-                    session.IsLifecycleDeactivated = true;
+                    var exitTask = session.Runtime.ExitAsync()
+                                   ?? throw new InvalidOperationException(
+                                       $"{session.Runtime.GetType().FullName}.ExitAsync returned null."
+                                   );
+                    await exitTask.ConfigureAwait(true);
+                    session.IsRuntimeExited = true;
                 } catch (Exception exception) {
-                    // Keep content and scope alive so deactivation can be retried safely.
+                    // Keep content and scope alive so runtime exit can be retried safely.
                     return exception;
                 }
             }
@@ -291,7 +288,7 @@ namespace ZArch.GameModules {
 
         private void EnsureUsable() {
             if (m_IsDisposed || m_IsShuttingDown) {
-                throw new ObjectDisposedException(nameof(GameModuleLauncher));
+                throw new ObjectDisposedException(nameof(GameModuleHost));
             }
         }
 
@@ -302,7 +299,7 @@ namespace ZArch.GameModules {
 
             if (Current != null || HasPendingCleanup || IsTransitioning) {
                 throw new InvalidOperationException(
-                    "GameModuleLauncher has active or pending asynchronous content. "
+                    "GameModuleHost has active or pending asynchronous content. "
                     + "Await ShutdownAsync or Architecture.ShutdownAsync before synchronous disposal."
                 );
             }

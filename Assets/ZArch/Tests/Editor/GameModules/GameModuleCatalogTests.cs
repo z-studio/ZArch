@@ -186,7 +186,6 @@ namespace ZArch.Tests.Editor {
         private sealed class FakeSceneProvider : IGameSceneProvider {
             private sealed class FakeSceneHandle : IGameSceneHandle {
                 public Scene Scene => default;
-                public string PackageName => null;
             }
 
             public string Id { get; }
@@ -200,8 +199,7 @@ namespace ZArch.Tests.Editor {
 
             public Task<IGameSceneHandle> LoadAsync(
                 string location,
-                CancellationToken cancellationToken,
-                string packageName
+                CancellationToken cancellationToken
             ) {
                 LoadedLocations.Add(location);
                 return Task.FromResult<IGameSceneHandle>(new FakeSceneHandle());
@@ -220,6 +218,9 @@ namespace ZArch.Tests.Editor {
     }
 
     public sealed class CatalogTestGameModuleAsset : UnityGameModuleAsset {
-        public override void Configure(ArchitectureScope scope, GameEnterContext context) { }
+        public override IGameModuleRuntime Configure(
+            ArchitectureScope scope,
+            GameEnterContext gameEnterContext
+        ) => GameModuleRuntime.Empty;
     }
 }

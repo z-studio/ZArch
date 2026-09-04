@@ -70,7 +70,7 @@ public interface IStorage : IUtility {
 }
 ```
 
-它可以由 Scope 拥有；如果实例由 Game Framework、SDK 或其他容器管理，则使用 `RegisterExternal` 注册。
+它可以由 Scope 拥有；如果实例由 Game Framework、SDK 或其他容器管理，则使用 `Bind` 绑定，并由对象所有者保存和释放解绑句柄。
 
 ## 5. Command
 

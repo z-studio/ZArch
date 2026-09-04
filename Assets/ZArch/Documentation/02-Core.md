@@ -90,15 +90,24 @@ var test = app.CreateChild("Test", scope => {
 scope.Register<IStorage>(new LocalStorage());
 ```
 
-默认 `owned: true`，Scope 会管理初始化和释放。
+`Register` 表示服务由 Scope 持有，只能在 `Configuring` 阶段调用。Scope 会为它注入上下文，并管理初始化、反初始化和 `Dispose`。
 
-外部拥有的对象：
+外部持有生命周期的对象使用 `Bind`：
 
 ```csharp
-scope.RegisterExternal<IAnalytics>(externalAnalytics);
+IDisposable binding = scope.Bind<IAnalytics>(externalAnalytics);
+
+var analytics = scope.Resolve<IAnalytics>();
+
+// 外部对象失效时解除解析关系。
+binding.Dispose();
 ```
 
-`RegisterExternal` 只把对象加入解析表，不调用 `SetScope`、初始化、反初始化或 `Dispose`。适合直接注册 Game Framework Component、SDK 单例以及由其他容器管理的对象。底层 `Register(..., owned: false)` 仍可使用，但它仍会注入 Scope；外部对象优先使用语义更明确的 `RegisterExternal`。
+`Bind` 可以在 `Configuring` 或 `Active` 状态调用，适合 Game Framework Component、SDK 单例、Setting、Camera 和其他 Unity 场景对象。它只建立解析关系：不调用 `SetScope`，不执行初始化、反初始化或 `Dispose`。
+
+返回的 `IDisposable` 是幂等解绑句柄。解除后当前 Scope 不再解析该对象；对象本身仍由调用方管理。Scope Dispose 时也会清理绑定记录，但不会销毁外部对象。
+
+同一个 Scope 内，同一服务键不能同时存在注册或绑定。子 Scope 仍可以通过自己的注册或绑定覆盖父级同类型对象。
 
 ### 实现类型
 
@@ -164,6 +173,8 @@ if (scope.TryResolve<IAnalytics>(out var analytics)) {
 ```csharp
 bool local = scope.IsRegisteredLocally<IStorage>();
 ```
+
+`IsRegisteredLocally<T>()` 同时检查本地服务注册和外部绑定。
 
 ZArch 使用精确注册键，不自动映射实现类型、基类或其他接口。循环 Factory 依赖会抛出异常。
 
@@ -319,16 +330,16 @@ Created → Configuring → Initializing → Active → Disposing → Disposed
                               Faulted
 ```
 
-- `Configuring`：允许注册，不允许解析。
+- `Configuring`：允许注册服务和绑定外部对象，不允许解析。
 - `Initializing`：创建服务并执行生命周期。
-- `Active`：允许解析、事件和创建子 Scope。
+- `Active`：允许解析、事件、创建子 Scope，以及绑定/解绑外部对象；不允许新增生命周期服务。
 - `Disposing/Disposed/Faulted`：拒绝继续使用。
 
 ## 8. 所有权原则
 
-- `owned: true`：Scope 负责初始化、反初始化和 Dispose。
-- `owned: false`：调用方负责对象生命周期，但普通 `Register` 仍会为 `ICanSetScope` 注入当前 Scope。
-- `RegisterExternal`：既不接管生命周期，也不向实例注入 Scope。
+- `Register` 与 `RegisterScopedFactory`：Scope 负责上下文注入、初始化、反初始化和 Dispose。
+- `Bind`：调用方负责对象生命周期；Scope 只提供解析与解绑，不向实例注入 Scope。
+- `RegisterTransient`：每次解析创建，默认由调用方持有；需要 Scope 统一 Dispose 时使用 `RegisterOwnedTransient`。
 - 创建 Child Scope 的代码负责决定它何时结束。
 - 父 Scope Dispose 会自动 Dispose 全部子 Scope。
 

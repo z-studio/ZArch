@@ -1,7 +1,10 @@
 using System;
+using System.Collections.Generic;
 
 namespace ZArch {
     public partial class Architecture {
+        internal IReadOnlyList<EventSubscriptionDebugInfo> GetEventDebugInfo() => m_Events.GetDebugInfo();
+
         public void Publish<T>() where T : new() {
             EnsureStarted();
             m_Events.Publish<T>();

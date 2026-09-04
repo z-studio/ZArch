@@ -7,17 +7,15 @@ namespace ZArch.GameModules.Unity {
     public sealed class BuildSettingsGameSceneProvider : IGameSceneProvider {
         private sealed class BuildSceneHandle : IGameSceneHandle {
             public Scene Scene { get; }
-            public string PackageName { get; }
 
-            public BuildSceneHandle(Scene scene, string packageName) {
+            public BuildSceneHandle(Scene scene) {
                 Scene = scene;
-                PackageName = packageName;
             }
         }
 
         public string Id => GameSceneProviderIds.kBuildSettings;
 
-        public async Task<IGameSceneHandle> LoadAsync(string location, CancellationToken cancellationToken, string packageName) {
+        public async Task<IGameSceneHandle> LoadAsync(string location, CancellationToken cancellationToken) {
             if (string.IsNullOrWhiteSpace(location)) {
                 throw new ArgumentException("Scene location cannot be empty.", nameof(location));
             }
@@ -55,7 +53,7 @@ namespace ZArch.GameModules.Unity {
 
             try {
                 cancellationToken.ThrowIfCancellationRequested();
-                return new BuildSceneHandle(loadedScene, "");
+                return new BuildSceneHandle(loadedScene);
             } catch {
                 await UnloadSceneAsync(loadedScene).ConfigureAwait(true);
                 throw;

@@ -21,10 +21,10 @@
 | API | 用途 |
 | --- | --- |
 | `CreateChild(...)` / `CreateChildAsync(...)` | 创建子 Scope |
-| `Register<T>(instance, owned, initializationOrder)` | 注册实例 |
-| `RegisterExternal<T>(instance)` | 注册外部拥有的实例，不注入 Scope 或管理生命周期 |
+| `Register<T>(instance, initializationOrder)` | 配置期注册由 Scope 管理生命周期的实例 |
+| `Bind<T>(instance)` | 配置期或 Active 状态绑定外部实例，返回可解除的 `IDisposable` |
 | `Register<TService,TImplementation>(...)` | 通过无参构造创建实现 |
-| `RegisterScopedFactory<T>(factory, owned, order)` | 注册每个 Scope 一个实例的 Factory |
+| `RegisterScopedFactory<T>(factory, initializationOrder)` | 注册由 Scope 管理、每个 Scope 一个实例的 Factory |
 | `RegisterTransient<T>(factory)` | 注册调用方拥有的 Transient |
 | `RegisterOwnedTransient<T>(factory)` | 注册由 Scope 统一 Dispose 的 Transient |
 | `RegisterAlias<TAlias,TService>()` | 为同一 Scoped 实例添加服务键 |
@@ -128,12 +128,12 @@ Scoped Event 沿用默认 Event 的能力限制。Controller 只能订阅，不�
 
 | API | 用途 |
 | --- | --- |
-| `IGameModule.Configure(scope, context)` | 配置模块 Scope |
+| `IGameModule.Configure(scope, context)` | 配置模块 Scope，并返回本次会话的 Runtime |
+| `GameModuleRuntime.Empty` | 模块无需场景绑定后的进入/退出逻辑时使用 |
 | `GameModuleCatalog` | Unity 模块资产目录 |
-| `GameModuleLauncher.EnterAsync(id, context, token)` | 进入模块 |
-| `GameModuleLauncher.ExitAsync()` | 退出当前模块并等待 GameScope 异步清理 |
-| `GameModuleLauncher.ShutdownAsync()` | 完整关闭、等待异步清理并禁止再次进入 |
-| `GameModuleLauncher.HasPendingCleanup` | 是否存在清理失败后尚未释放的模块内容 |
+| `GameModuleHost.EnterAsync(id, context, token)` | 进入模块 |
+| `GameModuleHost.ExitAsync()` | 退出当前模块并等待 GameScope 异步清理；无活动模块时安全返回 |
+| `GameModuleHost.ShutdownAsync()` | 完整关闭、等待异步清理并禁止再次进入 |
 | `UnityGameContentLoader` | 通过 Scene Provider 加载内容 |
 | `GameModuleSceneEntry` | 将已加载场景绑定到模块 Scope |
 
@@ -144,6 +144,7 @@ Scoped Event 沿用默认 Event 的能力限制。Controller 只能订阅，不�
 | Architecture is not started | 忘记调用 `Start()`，或已经 Shutdown |
 | Scope must be Active | 在 setup 中解析，或使用已释放 Scope |
 | Service is not registered | 注册键不一致，或服务不在当前/父 Scope |
+| Type is already registered or bound | 同一 Scope 已存在相同服务键；先解除旧绑定或使用子 Scope 覆盖 |
 | Circular factory dependency | Factory 之间循环解析 |
 | Async initialization requires async creation | 使用同步 API 创建了异步服务 |
 | Controller is already bound | 尝试把同一组件改绑到另一个 Scope |

@@ -173,13 +173,41 @@ public sealed class GameBootstrap : ArchitectureBootstrap {
 
 `SceneScopeManager` 管理 Scope 生命周期，但不会自动寻找并绑定所有 Controller。场景入口仍应显式决定哪些对象使用哪个 Scope。
 
+场景中的 Setting、Camera 或 MonoBehaviour 由 Unity 持有，不应注册为 Scope 生命周期服务。可以在场景入口临时绑定：
+
+```csharp
+using System;
+using UnityEngine;
+using ZArch;
+
+public sealed class BattleSceneEntry : MonoBehaviour {
+    [SerializeField] private BattleSetting m_Setting;
+    [SerializeField] private BattleWorld m_World;
+
+    private IDisposable m_SettingBinding;
+    private IDisposable m_WorldBinding;
+
+    public void BindScope(ArchitectureScope scope) {
+        m_SettingBinding = scope.Bind(m_Setting);
+        m_WorldBinding = scope.Bind(m_World);
+    }
+
+    private void OnDestroy() {
+        m_WorldBinding?.Dispose();
+        m_SettingBinding?.Dispose();
+    }
+}
+```
+
+绑定完成后，System、Controller 和其他服务仍然通过 `scope.Resolve<BattleSetting>()`、`scope.Resolve<BattleWorld>()` 获取对象。解绑不会销毁 Unity 对象。
+
 ## 5. BindableProperty 在 Unity 中的比较规则
 
 Unity Runtime 会在场景加载前为常见 Unity 类型注册比较器。例如 `float` 使用 `Mathf.Approximately`，可以减少浮点微小误差导致的重复通知。单个属性仍可以使用 `WithComparer` 覆盖全局规则。
 
 ## 6. 调试 Scope 树
 
-运行时可以用 `ArchitectureDebug.Capture(architecture)` 获取当前架构快照。编辑器中的 Architecture Debug 窗口用于查看 Scope 层级、服务注册和状态。
+运行时可以用 `ArchitectureDebug.Capture(architecture)` 获取当前架构快照。编辑器中的 Architecture Debug 窗口用于查看 Scope 层级、服务、外部绑定、事件和状态；`Services` 与 `Bindings` 会分组展示。
 
 排查问题时优先确认：
 

@@ -192,6 +192,14 @@ namespace ZArch {
             }
         }
 
+        private void EnsureBindable() {
+            if (State is not EScopeState.Configuring and not EScopeState.Active) {
+                throw new InvalidOperationException(
+                    $"Scope '{Name}' cannot bind external objects in state {State}."
+                );
+            }
+        }
+
         private void EnsureResolvable() {
             if (State is EScopeState.Disposing or EScopeState.Disposed or EScopeState.Faulted) {
                 throw new ObjectDisposedException($"Scope '{Name}' is in state {State}.");

@@ -39,21 +39,11 @@ namespace ZArch.GameModules.Unity {
             }
         }
 
-        public Task<IGameContentHandle> LoadAsync(
+        public async Task<IGameContentHandle> LoadAsync(
             IGameModule module,
             ArchitectureScope scope,
             GameEnterContext context,
             CancellationToken cancellationToken
-        ) {
-            return LoadWithPackageAsync(module, scope, context, cancellationToken, string.Empty);
-        }
-
-        public async Task<IGameContentHandle> LoadWithPackageAsync(
-            IGameModule module,
-            ArchitectureScope scope,
-            GameEnterContext context,
-            CancellationToken cancellationToken,
-            string packageName
         ) {
             if (module is not IUnityGameModule unityModule) {
                 throw new ArgumentException(
@@ -85,9 +75,7 @@ namespace ZArch.GameModules.Unity {
 
             cancellationToken.ThrowIfCancellationRequested();
 
-            var sceneHandle = await provider
-                                    .LoadAsync(location, cancellationToken, packageName)
-                                    .ConfigureAwait(true);
+            var sceneHandle = await provider.LoadAsync(location, cancellationToken).ConfigureAwait(true);
 
             if (sceneHandle == null) {
                 throw new InvalidOperationException(

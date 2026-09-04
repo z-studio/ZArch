@@ -20,7 +20,7 @@ Assets/ZArch
 │   ├── Runtime/            Unity 运行时适配
 │   └── Editor/             编辑器工具
 ├── GameModules/
-│   ├── Runtime/            纯 C# 模块协议与 Launcher
+│   ├── Runtime/            纯 C# 模块协议与 Host
 │   └── Unity/              Catalog 与 Scene Provider
 ├── Tests/Editor/           EditMode 测试
 └── Documentation/          使用教程
@@ -108,12 +108,13 @@ ArchitectureScope.Debug.cs
 - Architecture 启动、关闭以及禁止重启；
 - 根/子 Scope 创建、父级解析和覆盖；
 - Scoped Factory、无所有权 Transient、Owned Transient、Alias 与循环 Factory；
+- 配置期/Active 外部绑定、主动解绑、类型冲突以及外部对象不参与生命周期；
 - 初始化顺序、同步/异步逆序释放、清理异常聚合与失败回滚；
 - 异步成功、取消、超时以及初始化/关闭竞态；
 - 默认事件、Scoped Event、父链冒泡、Scope 自动注销和订阅异常；
 - BindableProperty 比较、立即回调和注销；
 - Scene Scope 的创建与卸载；
-- GameModuleLauncher 进入、退出、重复切换和加载失败回滚。
+- GameModuleHost 进入、退出、重复切换和加载失败回滚。
 
 提交前在 Unity Test Runner 运行 `ZArch.Tests.Editor`，并确认 Console 没有意外异常。涉及 Player Runtime 行为时，再补一次目标平台构建验证。
 

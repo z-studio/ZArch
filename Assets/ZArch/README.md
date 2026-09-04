@@ -147,6 +147,16 @@ var app = architecture.CreateRootScope("App", scope => {
 var repository = app.Resolve<IRepository>();
 ```
 
+由 Scope 管理的服务使用 `Register`；场景对象、SDK 单例等由外部管理的实例使用 `Bind`：
+
+```csharp
+IDisposable binding = app.Bind(externalClock);
+var clock = app.Resolve<ExternalClock>();
+
+// 只解除解析关系，不会销毁 externalClock。
+binding.Dispose();
+```
+
 ## 程序集
 
 ```text
@@ -215,14 +225,14 @@ Core 和 Patterns 均启用 `noEngineReferences`。
 
 - ZArch 采用串行执行模型。Unity 项目应在主线程访问 Architecture 和 Scope。
 - `Architecture` 调用 `Shutdown()` 后不能重新启动；需要重新创建实例。
-- Scope 激活后注册表被冻结，运行时变化通过创建或销毁子 Scope 表达。
+- Scope 激活后不能再 `Register` 生命周期服务；运行时外部对象可以通过 `Bind` 临时加入解析表。
 - 创建 Scope 的一方必须明确负责其释放；父 Scope 会自动释放所有子 Scope。
 - Patterns 事件订阅默认跟随所属 Scope 释放；直接调用 `Architecture.Subscribe` 的订阅需要手动管理。
 - `AbstractModel` 与 `AbstractSystem` 实例只能绑定一个 Scope；不同 Scope 必须使用不同实例。
 - 同步 Scope 不能包含 `IAsyncInitializable` 服务。
 - 包含 `IAsyncDeinitializable` 的 Scope 应使用 `DisposeAsync()` 或 `Architecture.ShutdownAsync()`。
 - Transient 默认不归 Scope 所有；需要统一释放时必须显式使用 `RegisterOwnedTransient`。
-- Game Framework Component 或 SDK 单例等外部对象使用 `RegisterExternal`，ZArch 不接管其 Scope 与生命周期。
+- Game Framework Component、SDK 单例和 Unity 场景对象使用 `Bind`；保存返回的 `IDisposable` 并在外部对象失效时解除绑定。
 - Patterns 事件订阅会随 Scope 释放；订阅者寿命短于 Scope 时保存 `IUnregister`，并使用 Unity 自动注销扩展或绑定期列表提前解除。
 - ZArch 不提供内部锁，也不承诺并发线程安全；后台任务完成后应先回到所属同步上下文。
 

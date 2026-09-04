@@ -89,12 +89,12 @@ namespace ZArch.Tests.Editor {
         }
 
         [Test]
-        public async Task EnterAndExit_DriveLifecycleAroundLoadedContent() {
+        public async Task EnterAndExit_DriveRuntimeAroundLoadedContent() {
             var order = new List<string>();
-            var lifecycle = new FakeLifecycle(order);
+            var runtime = new FakeRuntime(order);
             var module = new FakeModule(
                 "game-a",
-                (scope, _) => scope.Register<IGameModuleLifecycle>(lifecycle)
+                runtime: runtime
             );
             m_ContentLoader.AfterLoad = () => order.Add("content-loaded");
             m_ContentLoader.BeforeUnload = () => order.Add("content-unload");
@@ -107,37 +107,36 @@ namespace ZArch.Tests.Editor {
                 order,
                 Is.EqualTo(new[] {
                     "content-loaded",
-                    "lifecycle-activate",
-                    "lifecycle-deactivate",
+                    "runtime-enter",
+                    "runtime-exit",
                     "content-unload"
                 })
             );
         }
 
         [Test]
-        public void EnterAsync_WhenLifecycleActivationFails_DeactivatesAndRollsBack() {
-            var lifecycle = new FakeLifecycle { FailActivation = true };
+        public void EnterAsync_WhenRuntimeEnterFails_ExitsAndRollsBack() {
+            var runtime = new FakeRuntime { FailEntering = true };
             var module = new FakeModule(
                 "game-a",
-                (scope, _) => scope.Register<IGameModuleLifecycle>(lifecycle)
+                runtime: runtime
             );
             var launcher = CreateLauncher(module);
 
             Assert.ThrowsAsync<InvalidOperationException>(async () => await launcher.EnterAsync("game-a"));
 
-            Assert.That(lifecycle.DeactivationCount, Is.EqualTo(1));
+            Assert.That(runtime.ExitCount, Is.EqualTo(1));
             Assert.That(m_ContentLoader.UnloadedIds, Is.EqualTo(new[] { "game-a" }));
             Assert.That(launcher.Current, Is.Null);
-            Assert.That(launcher.HasPendingCleanup, Is.False);
             Assert.That(m_AppRoot.Children, Is.Empty);
         }
 
         [Test]
-        public async Task ExitAsync_WhenLifecycleDeactivationFails_PreservesSessionForRetry() {
-            var lifecycle = new FakeLifecycle { FailDeactivation = true };
+        public async Task ExitAsync_WhenRuntimeExitFails_PreservesSessionForRetry() {
+            var runtime = new FakeRuntime { FailExiting = true };
             var module = new FakeModule(
                 "game-a",
-                (scope, _) => scope.Register<IGameModuleLifecycle>(lifecycle)
+                runtime: runtime
             );
             var launcher = CreateLauncher(module);
             var session = await launcher.EnterAsync("game-a");
@@ -145,15 +144,13 @@ namespace ZArch.Tests.Editor {
             Assert.ThrowsAsync<InvalidOperationException>(async () => await launcher.ExitAsync());
 
             Assert.That(launcher.Current, Is.Null);
-            Assert.That(launcher.HasPendingCleanup, Is.True);
             Assert.That(session.Scope.IsDisposed, Is.False);
             Assert.That(m_ContentLoader.UnloadedIds, Is.Empty);
 
-            lifecycle.FailDeactivation = false;
+            runtime.FailExiting = false;
             await launcher.ExitAsync();
 
-            Assert.That(lifecycle.DeactivationCount, Is.EqualTo(2));
-            Assert.That(launcher.HasPendingCleanup, Is.False);
+            Assert.That(runtime.ExitCount, Is.EqualTo(2));
             Assert.That(session.Scope.IsDisposed, Is.True);
             Assert.That(m_ContentLoader.UnloadedIds, Is.EqualTo(new[] { "game-a" }));
         }
@@ -187,7 +184,6 @@ namespace ZArch.Tests.Editor {
             Assert.That(exception.InnerExceptions[0], Is.TypeOf<OperationCanceledException>());
             Assert.That(exception.InnerExceptions[1].Message, Does.Contain("Failed to unload game-a"));
             Assert.That(launcher.Current, Is.Null);
-            Assert.That(launcher.HasPendingCleanup, Is.True);
             Assert.That(m_AppRoot.Children, Is.Empty);
         }
 
@@ -216,7 +212,6 @@ namespace ZArch.Tests.Editor {
             Assert.ThrowsAsync<InvalidOperationException>(async () => await launcher.ExitAsync());
 
             Assert.That(launcher.Current, Is.Null);
-            Assert.That(launcher.HasPendingCleanup, Is.True);
             Assert.That(session.Scope.IsDisposed, Is.True);
 
             var enterException = Assert.ThrowsAsync<InvalidOperationException>(async () =>
@@ -227,8 +222,6 @@ namespace ZArch.Tests.Editor {
 
             m_ContentLoader.FailUnloading = false;
             await launcher.ExitAsync();
-
-            Assert.That(launcher.HasPendingCleanup, Is.False);
 
             var next = await launcher.EnterAsync("game-b");
             Assert.That(launcher.Current, Is.SameAs(next));
@@ -285,9 +278,9 @@ namespace ZArch.Tests.Editor {
             Assert.That(m_AppRoot.Children, Is.Empty);
         }
 
-        private GameModuleLauncher CreateLauncher(params IGameModule[] modules) =>
+        private GameModuleHost CreateLauncher(params IGameModule[] modules) =>
             new(
-                new GameScopeFactory(m_AppRoot),
+                m_AppRoot,
                 m_ContentLoader,
                 modules
             );
@@ -299,14 +292,23 @@ namespace ZArch.Tests.Editor {
 
             public FakeModule(
                 string id,
-                Action<ArchitectureScope, GameEnterContext> configure = null
+                Action<ArchitectureScope, GameEnterContext> configure = null,
+                IGameModuleRuntime runtime = null
             ) {
                 Id = id;
                 m_Configure = configure;
+                Runtime = runtime ?? GameModuleRuntime.Empty;
             }
 
-            public void Configure(ArchitectureScope scope, GameEnterContext context) =>
-                m_Configure?.Invoke(scope, context);
+            private IGameModuleRuntime Runtime { get; }
+
+            public IGameModuleRuntime Configure(
+                ArchitectureScope scope,
+                GameEnterContext gameEnterContext
+            ) {
+                m_Configure?.Invoke(scope, gameEnterContext);
+                return Runtime;
+            }
         }
 
         private sealed class FakeContentHandle : IGameContentHandle {
@@ -370,35 +372,34 @@ namespace ZArch.Tests.Editor {
             }
         }
 
-        private sealed class FakeLifecycle : IGameModuleLifecycle {
+        private sealed class FakeRuntime : IGameModuleRuntime {
             private readonly List<string> m_Order;
 
-            public bool FailActivation { get; set; }
-            public bool FailDeactivation { get; set; }
-            public int DeactivationCount { get; private set; }
+            public bool FailEntering { get; set; }
+            public bool FailExiting { get; set; }
+            public int ExitCount { get; private set; }
 
-            public FakeLifecycle(List<string> order = null) {
+            public FakeRuntime(List<string> order = null) {
                 m_Order = order;
             }
 
-            public Task ActivateAsync(CancellationToken cancellationToken) {
+            public Task EnterAsync(CancellationToken cancellationToken) {
                 cancellationToken.ThrowIfCancellationRequested();
-                m_Order?.Add("lifecycle-activate");
+                m_Order?.Add("runtime-enter");
 
-                if (FailActivation) {
-                    throw new InvalidOperationException("Lifecycle activation failed.");
+                if (FailEntering) {
+                    throw new InvalidOperationException("Runtime enter failed.");
                 }
 
                 return Task.CompletedTask;
             }
 
-            public Task DeactivateAsync(CancellationToken cancellationToken) {
-                cancellationToken.ThrowIfCancellationRequested();
-                DeactivationCount++;
-                m_Order?.Add("lifecycle-deactivate");
+            public Task ExitAsync() {
+                ExitCount++;
+                m_Order?.Add("runtime-exit");
 
-                if (FailDeactivation) {
-                    throw new InvalidOperationException("Lifecycle deactivation failed.");
+                if (FailExiting) {
+                    throw new InvalidOperationException("Runtime exit failed.");
                 }
 
                 return Task.CompletedTask;

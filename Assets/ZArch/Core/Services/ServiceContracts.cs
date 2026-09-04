@@ -22,6 +22,7 @@ namespace ZArch {
         public bool IsCreated { get; internal set; }
         public bool IsInitialized { get; internal set; }
         public bool IsOwned { get; internal set; }
+        public bool IsBinding { get; internal set; }
     }
 
     internal sealed class ServiceRegistration {
@@ -35,6 +36,7 @@ namespace ZArch {
         public bool IsCreating;
         public bool IsInitialized;
         public bool AttachContext;
+        public bool IsBinding;
     }
 
     internal sealed class ReferenceEqualityComparer : IEqualityComparer<object> {

@@ -2,7 +2,10 @@ using System;
 
 namespace ZArch {
     public sealed partial class ArchitectureScope {
-        public void Register<TService>(TService instance, bool owned = true, int initializationOrder = 0)
+        /// <summary>
+        /// 注册由 Scope 管理生命周期的服务实例。仅可在 Scope 配置阶段调用。
+        /// </summary>
+        public void Register<TService>(TService instance, int initializationOrder = 0)
             where TService : class {
             if (instance == null) {
                 throw new ArgumentNullException(nameof(instance));
@@ -12,38 +15,56 @@ namespace ZArch {
                 typeof(TService),
                 _ => instance,
                 EServiceLifetime.Scoped,
-                owned,
+                true,
                 initializationOrder,
                 instance,
                 true
             );
         }
 
-        public void RegisterExternal<TService>(TService instance) where TService : class {
+        /// <summary>
+        /// 将调用方持有生命周期的外部对象绑定到当前 Scope。
+        /// 绑定不参与初始化和释放，可在配置期或 Active 状态下创建，并通过返回值解除。
+        /// </summary>
+        public IDisposable Bind<TService>(TService instance) where TService : class {
             if (instance == null) {
                 throw new ArgumentNullException(nameof(instance));
             }
 
-            RegisterDescriptor(
-                typeof(TService),
-                _ => instance,
-                EServiceLifetime.Scoped,
-                false,
-                0,
-                instance,
-                false
-            );
+            EnsureBindable();
+            Type serviceType = typeof(TService);
+
+            if (m_Registrations.ContainsKey(serviceType)) {
+                throw new InvalidOperationException(
+                    $"Type {serviceType.FullName} is already registered or bound in scope '{Name}'."
+                );
+            }
+
+            var registration = new ServiceRegistration {
+                ServiceType = serviceType,
+                Factory = _ => instance,
+                Lifetime = EServiceLifetime.Scoped,
+                Owned = false,
+                InitializationOrder = 0,
+                RegistrationOrder = m_NextRegistrationOrder++,
+                Instance = instance,
+                AttachContext = false,
+                IsBinding = true
+            };
+
+            m_Registrations.Add(serviceType, registration);
+            m_RegistrationOrder.Add(registration);
+            return new ExternalBinding(this, registration);
         }
 
-        public void Register<TService, TImplementation>(bool owned = true, int initializationOrder = 0)
+        public void Register<TService, TImplementation>(int initializationOrder = 0)
             where TService : class
             where TImplementation : class, TService, new() {
-            RegisterScopedFactory<TService>(_ => new TImplementation(), owned, initializationOrder);
+            RegisterScopedFactory<TService>(_ => new TImplementation(), initializationOrder);
         }
 
         public void RegisterScopedFactory<TService>(
             Func<IServiceResolver, TService> factory,
-            bool owned = true,
             int initializationOrder = 0
         ) where TService : class {
             if (factory == null) {
@@ -54,7 +75,7 @@ namespace ZArch {
                 typeof(TService),
                 factory,
                 EServiceLifetime.Scoped,
-                owned,
+                true,
                 initializationOrder,
                 null,
                 true
@@ -126,7 +147,7 @@ namespace ZArch {
 
             if (m_Registrations.ContainsKey(serviceType)) {
                 throw new InvalidOperationException(
-                    $"Type {serviceType.FullName} is already registered in scope '{Name}'."
+                    $"Type {serviceType.FullName} is already registered or bound in scope '{Name}'."
                 );
             }
 
@@ -152,6 +173,36 @@ namespace ZArch {
                 if (owned) {
                     AddOwned(instance);
                 }
+            }
+        }
+
+        private void RemoveBinding(ServiceRegistration registration) {
+            if (registration == null || !registration.IsBinding) {
+                return;
+            }
+
+            if (m_Registrations.TryGetValue(registration.ServiceType, out var current)
+                && ReferenceEquals(current, registration)) {
+                m_Registrations.Remove(registration.ServiceType);
+                m_RegistrationOrder.Remove(registration);
+            }
+        }
+
+        private sealed class ExternalBinding : IDisposable {
+            private ArchitectureScope m_Scope;
+            private ServiceRegistration m_Registration;
+
+            public ExternalBinding(ArchitectureScope scope, ServiceRegistration registration) {
+                m_Scope = scope;
+                m_Registration = registration;
+            }
+
+            public void Dispose() {
+                ArchitectureScope scope = m_Scope;
+                ServiceRegistration registration = m_Registration;
+                m_Scope = null;
+                m_Registration = null;
+                scope?.RemoveBinding(registration);
             }
         }
     }

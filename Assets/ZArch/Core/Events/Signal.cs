@@ -32,7 +32,7 @@ namespace ZArch {
     }
 
     public class Signal<T> : ISignal {
-        private Action<T> m_OnEvent = _ => { };
+        private Action<T> m_OnEvent;
 
         public IUnregister Subscribe(Action<T> onEvent) {
             if (onEvent == null) {
@@ -46,6 +46,8 @@ namespace ZArch {
         public void Unsubscribe(Action<T> onEvent) => m_OnEvent -= onEvent;
 
         public void Emit(T value) => EventDispatch.Invoke(m_OnEvent, handler => ((Action<T>)handler).Invoke(value));
+
+        internal Delegate[] GetSubscriberDebugInfo() => m_OnEvent?.GetInvocationList() ?? Array.Empty<Delegate>();
 
         IUnregister ISignal.Subscribe(Action onEvent) {
             if (onEvent == null) {
