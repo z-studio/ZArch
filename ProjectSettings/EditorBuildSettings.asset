@@ -8,6 +8,21 @@ EditorBuildSettings:
   - enabled: 1
     path: Assets/Scenes/SampleScene.unity
     guid: 99c9720ab356a0642a771bea13969a05
+  - enabled: 1
+    path: Packages/com.z-studio.zarch.unity/Samples/Counter/Counter.unity
+    guid: d555cfa1407e74310a9163385261389a
+  - enabled: 1
+    path: Packages/com.z-studio.zarch.unity/Samples/Inventory/Inventory.unity
+    guid: 0627cafc41a4743178747d23f544afdc
+  - enabled: 1
+    path: Packages/com.z-studio.zarch.unity/Samples/Games/Lobby.unity
+    guid: 2b11b2125b5664cb5bd98d832013bf8c
+  - enabled: 1
+    path: Packages/com.z-studio.zarch.unity/Samples/Games/GameA.unity
+    guid: 1d824330d52684c4faf7630bc92378ff
+  - enabled: 1
+    path: Packages/com.z-studio.zarch.unity/Samples/Games/GameB.unity
+    guid: 34c0a84815a754631a1f096e38e57761
   m_configObjects:
     com.unity.input.settings.actions: {fileID: -944628639613478452, guid: 052faaac586de48259a63d0c4782560b, type: 3}
   m_UseUCBPForAssetBundles: 0

@@ -1,0 +1,15 @@
+{
+  "name": "com.z-studio.zarch",
+  "version": "1.0.0",
+  "displayName": "ZArch",
+  "description": "",
+  "unity": "6000.0",
+  "keywords": [
+    "architecture",
+    "module",
+    "framework"
+  ],
+  "author": {
+    "name": "Z Studio"
+  }
+}

@@ -1,0 +1,16 @@
+{
+    "name": "ZArch.Unity",
+    "rootNamespace": "ZArch.Unity",
+    "references": [
+        "ZArch"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

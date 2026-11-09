@@ -1,0 +1,21 @@
+{
+    "name": "ZArch.Unity.Samples.Editor",
+    "rootNamespace": "ZArch.Unity",
+    "references": [
+        "ZArch.Unity",
+        "ZArch.Unity.Samples",
+        "ZArch",
+        "Unity.ugui"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
