@@ -4,10 +4,11 @@ using QFramework;
 namespace Demo.GameB {
     public sealed class PlayRoundCommand : AbstractCommand {
         protected override void OnExecute() {
-            this.GetModel<RoundModel>().rounds.Value++;
+            var roundModel = this.GetModel<RoundModel>();
+            var wallet = this.GetModel<WalletModel>();
 
-            // 本地没有 WalletModel，自动取得 App 钱包的同一个实例。
-            this.GetModel<WalletModel>().coins.Value += 20;
+            roundModel.rounds.Value++;       // 当前游戏的回合数。
+            wallet.SetCoins(wallet.coins.Value + 20);       // 当前账号的钱包，切换游戏不会重建。
         }
     }
 }

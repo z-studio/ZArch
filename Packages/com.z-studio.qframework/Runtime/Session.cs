@@ -3,15 +3,14 @@ using System.Collections.Generic;
 using System.Threading;
 
 namespace QFramework {
-    /// <summary>QF 的非单例子会话：本地优先查找，未注册时使用父架构。</summary>
+    /// <summary>管理一段使用期间的数据、服务与订阅；服务向父级查找，事件共用根架构。</summary>
     public sealed class Session : IArchitecture, IDisposable {
         private readonly Dictionary<Type, object> m_Instances = new();
         private readonly List<object> m_RegistrationOrder = new();
         private readonly List<ICanInit> m_InitOrder = new();
-        private readonly HashSet<Subscription> m_Subscriptions = new();
+        private readonly List<Subscription> m_Subscriptions = new();
         private readonly List<Session> m_Children = new();
         private readonly CancellationTokenSource m_Lifetime = new();
-        private TypeEventSystem m_Events = new();
         private bool m_Initialized;
         private bool m_Initializing;
         private bool m_Disposing;
@@ -147,35 +146,49 @@ namespace QFramework {
             return query.Do();
         }
 
+        // 默认事件直接使用根架构的事件系统，与 QF 的普通 SendEvent/RegisterEvent 一致。
         public void SendEvent<T>() where T : new() => SendEvent(new T());
 
         public void SendEvent<T>(T message) {
             EnsureAlive();
-            m_Events.Send(message);
+            App.SendEvent(message);
         }
 
         public IUnregister RegisterEvent<T>(Action<T> handler) {
             EnsureAlive();
-            return Track(m_Events.Register(handler));
+
+            if (handler == null) {
+                throw new ArgumentNullException(nameof(handler));
+            }
+
+            // 为每次注册建立独立委托，解除游戏订阅不会误删根架构或其他会话中的同名处理方法。
+            void Receive(T message) {
+                if (!IsDisposed && !m_Disposing) {
+                    handler(message);
+                }
+            }
+
+            return Track(App.RegisterEvent<T>(Receive), typeof(T), handler);
         }
 
         public void UnregisterEvent<T>(Action<T> handler) {
             EnsureAlive();
-            m_Events.Unregister(handler);
-        }
 
-        internal IUnregister RegisterAppEvent<T>(Action<T> handler) {
-            EnsureAlive();
+            // 与 QF 的委托解除规则一致：每次解除最后一次匹配的注册，只处理当前会话拥有的订阅。
+            for (var i = m_Subscriptions.Count - 1; i >= 0; i--) {
+                var subscription = m_Subscriptions[i];
 
-            if (m_Disposing) {
-                throw new ObjectDisposedException(Name);
+                if (subscription.EventType == typeof(T) && Equals(subscription.Handler, handler)) {
+                    subscription.Unregister();
+                    return;
+                }
             }
-
-            return Track(App.RegisterEvent(handler));
         }
 
-        /// <summary>跟踪 App 事件、BindableProperty 等订阅，在会话结束时自动取消。</summary>
-        public IUnregister Track(IUnregister subscription) {
+        /// <summary>跟踪事件或 BindableProperty 等订阅，在会话结束时自动取消。</summary>
+        public IUnregister Track(IUnregister subscription) => Track(subscription, null, null);
+
+        private IUnregister Track(IUnregister subscription, Type eventType, Delegate handler) {
             EnsureAlive();
 
             if (subscription == null) {
@@ -187,7 +200,7 @@ namespace QFramework {
                 throw new ObjectDisposedException(Name);
             }
 
-            var tracked = new Subscription(this, subscription);
+            var tracked = new Subscription(this, subscription, eventType, handler);
             m_Subscriptions.Add(tracked);
             return tracked;
         }
@@ -241,7 +254,6 @@ namespace QFramework {
             m_Instances.Clear();
             m_RegistrationOrder.Clear();
             m_InitOrder.Clear();
-            m_Events = null;
 
             if (Parent is Session parent) {
                 parent.m_Children.Remove(this);
@@ -274,9 +286,14 @@ namespace QFramework {
             private Session m_Owner;
             private IUnregister m_Inner;
 
-            public Subscription(Session owner, IUnregister inner) {
+            public Type EventType { get; private set; }
+            public Delegate Handler { get; private set; }
+
+            public Subscription(Session owner, IUnregister inner, Type eventType, Delegate handler) {
                 m_Owner = owner;
                 m_Inner = inner;
+                EventType = eventType;
+                Handler = handler;
             }
 
             public void Unregister() {
@@ -287,10 +304,18 @@ namespace QFramework {
                 }
 
                 m_Inner = null;
+                EventType = null;
+                Handler = null;
                 m_Owner.m_Subscriptions.Remove(this);
                 m_Owner = null;
                 inner.Unregister();
             }
         }
+    }
+
+    public static class SessionExtensions {
+        /// <summary>将属性或其他外部订阅绑定到会话，结束时自动解除。</summary>
+        public static IUnregister UnregisterWhenSessionEnds(this IUnregister subscription, Session session) =>
+            session.Track(subscription);
     }
 }

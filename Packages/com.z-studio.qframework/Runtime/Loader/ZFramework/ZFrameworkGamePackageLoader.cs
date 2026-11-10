@@ -2,18 +2,21 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 using ZFramework.Unity;
+using UnityEngine.SceneManagement;
 
 namespace QFramework {
     /// <summary>复用 ZFramework 资源池，并在子会话释放前清理游戏表现。</summary>
     public sealed class ZFrameworkGamePackageLoader : IGamePackageLoader {
         private readonly ResourceComponent m_Resource;
+        private readonly ZFrameworkGamePackages m_Packages;
         private readonly Func<GameInfo, string> m_PackageName;
         private readonly Func<string, CancellationToken, Task> m_ClosePresentation;
 
         public ZFrameworkGamePackageLoader(ResourceComponent resource, Func<GameInfo, string> packageName = null,
-            Func<string, CancellationToken, Task> closePresentation = null) {
+            Func<string, CancellationToken, Task> closePresentation = null, ZFrameworkGamePackages packages = null) {
             m_Resource = resource ? resource : throw new ArgumentNullException(nameof(resource));
-            m_PackageName = packageName ?? (info => info.id);
+            m_PackageName = packageName ?? ZFrameworkGamePackages.PackageName;
+            m_Packages = packages;
             m_ClosePresentation = closePresentation ?? ClosePackagePresentationAsync;
         }
 
@@ -28,8 +31,14 @@ namespace QFramework {
                 throw new ArgumentException("Game resource package name is empty.", nameof(info));
             }
 
-            var inner =
-                await new UnityGamePackageLoader(new DefinitionLoader(m_Resource, name)).LoadAsync(info, cancellation);
+            if (m_Packages != null) {
+                // 把同一包名交给准备器，兼容项目自定义的包名映射。
+                await m_Packages.PrepareAsync(
+                    new GameInfo { id = info.id, packageName = name, entryAddress = info.entryAddress }, cancellation);
+            }
+
+            var inner = await new UnityGamePackageLoader(new DefinitionLoader(m_Resource, name),
+                new SceneLoader(name)).LoadAsync(info, cancellation);
             return new GamePackage(inner, new ZFrameworkGameResources(m_Resource, name), name, m_ClosePresentation);
         }
 
@@ -51,6 +60,33 @@ namespace QFramework {
 
             if (sound) {
                 await sound.ReleasePackageSoundsAsync(package, cancellation);
+            }
+        }
+
+        private sealed class SceneLoader : IGameSceneLoader {
+            private readonly string m_Package;
+            public SceneLoader(string package) => m_Package = package;
+
+            public async Task<GameSceneHandle> LoadAsync(string address, CancellationToken cancellation) {
+                cancellation.ThrowIfCancellationRequested();
+                var scenes = ZFrameworkUnityEntry.GetComponent<SceneComponent>();
+
+                if (!scenes) {
+                    throw new InvalidOperationException("Configure ZFramework SceneComponent for scene games.");
+                }
+
+                var scene = await scenes.LoadSceneAsync(address, LoadSceneMode.Additive, packageName: m_Package);
+
+                if (!scene.IsValid() || !scene.isLoaded) {
+                    throw new InvalidOperationException($"Cannot load game scene '{address}'.");
+                }
+
+                // 即使此时取消也返回句柄，由统一退出路径卸载已经完成的场景。
+                return new GameSceneHandle(scene, async () => {
+                    if (!await scenes.UnloadSceneAsync(address, (Action<float>)null, m_Package)) {
+                        throw new InvalidOperationException($"Cannot unload game scene '{address}'.");
+                    }
+                });
             }
         }
 
@@ -141,7 +177,7 @@ namespace QFramework {
                 await m_Inner.ExitAsync(cancellation);
                 await m_Close(m_Name, cancellation);
                 await m_Resources.DrainAsync();
-                
+
                 // 散图绑定需要在 UI/实体停止使用之后释放，保留到 Session.Deinit 前完成。
                 var resource = ZFrameworkUnityEntry.GetComponent<ResourceComponent>();
 

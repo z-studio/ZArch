@@ -34,11 +34,15 @@ namespace QFramework {
                 }
 
                 m_Games.Add(game.id,
-                    new GameInfo { id = game.id, entryAddress = game.entryAddress });
+                    new GameInfo { id = game.id, packageName = game.packageName, entryAddress = game.entryAddress });
             }
         }
 
         public async Task OpenAsync(string id, CancellationToken cancellation = default) {
+            await OpenAsync(id, null, cancellation);
+        }
+
+        public async Task OpenAsync(string id, object arguments, CancellationToken cancellation = default) {
             if (!m_Games.TryGetValue(id, out var info)) {
                 throw new KeyNotFoundException($"Unknown game '{id}'.");
             }
@@ -46,10 +50,6 @@ namespace QFramework {
             EnterOperation();
 
             try {
-                if (State == GameState.Running && CurrentGameId == id) {
-                    return;
-                }
-
                 using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellation, m_Lifetime.Token);
                 linked.Token.ThrowIfCancellationRequested();
                 await CloseCurrentAsync(CancellationToken.None);
@@ -61,6 +61,7 @@ namespace QFramework {
                                 ?? throw new InvalidOperationException("Loader returned no package.");
                     linked.Token.ThrowIfCancellationRequested();
                     CurrentSession = new Session(m_Parent, id);
+                    CurrentSession.RegisterUtility(new GameArguments(arguments));
                     m_Package.Configure(CurrentSession);
                     CurrentSession.Initialize();
                     m_Game = m_Package.CreateGame() ?? throw new InvalidOperationException("Package returned no game.");

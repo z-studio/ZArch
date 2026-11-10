@@ -32,6 +32,7 @@ namespace Demo.Editor {
             var previous = SceneManager.GetActiveScene();
             var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Additive);
             SceneManager.SetActiveScene(scene);
+            EditorSceneManager.SaveScene(scene, AppPath);
 
             try {
                 BuildGame<GameAEntry, GameADefinition>("GameA", entry => entry.PlayRound);
@@ -42,24 +43,26 @@ namespace Demo.Editor {
                 root.gameObject.AddComponent<SampleInput>();
                 Set(root, "m_Resource", resource);
                 var canvas = Canvas(root.transform, 0);
-                Set(root, "m_Status", Text(canvas, "Status", "Starting", -210, 245));
-                Set(root, "m_Account", Text(canvas, "Account", "Signed out", -210, 185));
-                Set(root, "m_Coins", Text(canvas, "Coins", "Coins: 0", -210, 130));
+                var view = canvas.gameObject.AddComponent<AppView>();
+                Set(root, "m_View", view);
+                Set(view, "m_Status", Text(canvas, "Status", "Starting", -210, 245));
+                Set(view, "m_Account", Text(canvas, "Account", "Signed out", -210, 185));
+                Set(view, "m_Coins", Text(canvas, "Coins", "Coins: 0", -210, 130));
                 var login = new GameObject("LoginPanel", typeof(RectTransform));
                 login.transform.SetParent(canvas, false);
-                Set(root, "m_LoginPanel", login);
-                SetArray(root, "m_LoginButtons",
+                Set(view, "m_LoginPanel", login);
+                SetArray(view, "m_LoginButtons",
                     Button(login.transform, "LoginAlice", "Login as Alice", -210, 35, root.LoginAlice),
                     Button(login.transform, "LoginBob", "Login as Bob", -210, -40, root.LoginBob));
                 var lobby = new GameObject("LobbyPanel", typeof(RectTransform));
                 lobby.transform.SetParent(canvas, false);
-                Set(root, "m_LobbyPanel", lobby);
-                SetArray(root, "m_GameButtons",
+                Set(view, "m_LobbyPanel", lobby);
+                SetArray(view, "m_GameButtons",
                     Button(lobby.transform, "OpenGameA", "Open Game A", -210, 35, root.OpenGameA),
                     Button(lobby.transform, "OpenGameB", "Open Game B", -210, -40, root.OpenGameB));
-                Set(root, "m_Return", Button(lobby.transform, "ReturnToLobby", "Return to lobby", -210, -115, root.ReturnToLobby));
-                Set(root, "m_Logout", Button(canvas, "Logout", "Logout / Cancel login", -210, -200, root.Logout));
-                Set(root, "m_Retry", Button(canvas, "RetryStartup", "Retry startup", 210, -200, root.RetryStartup));
+                Set(view, "m_Return", Button(lobby.transform, "ReturnToLobby", "Return to lobby", -210, -115, root.ReturnToLobby));
+                Set(view, "m_Logout", Button(canvas, "Logout", "Logout / Cancel login", -210, -200, root.Logout));
+                Set(view, "m_Retry", Button(canvas, "RetryStartup", "Retry startup", 210, -200, root.RetryStartup));
                 Text(canvas, "Hint", "App > Account > Game / ZFramework resources", 0, -270, 850);
                 EditorSceneManager.SaveScene(scene, AppPath);
             } finally {
@@ -98,6 +101,18 @@ namespace Demo.Editor {
                 }
 
                 Set(definition, "m_Prefab", prefab.GetComponent<TEntry>());
+                SetString(definition, "m_SceneAddress", "");
+                if (name == "GameB") {
+                    // A 演示 Prefab 入口，B 演示 Additive 场景入口；生命周期和业务写法一致。
+                    var active = SceneManager.GetActiveScene();
+                    var gameScene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Additive);
+                    PrefabUtility.InstantiatePrefab(prefab, gameScene);
+                    EditorSceneManager.SaveScene(gameScene, folder + "/GameBScene.unity");
+                    EditorSceneManager.CloseScene(gameScene, true);
+                    SceneManager.SetActiveScene(active);
+                    Set(definition, "m_Prefab", null);
+                    SetString(definition, "m_SceneAddress", "GameBScene");
+                }
                 File.WriteAllText(folder + "/GameConfig.txt", name + " dynamic resource");
                 var marker = new GameObject("Marker");
                 PrefabUtility.SaveAsPrefabAsset(marker, folder + "/Marker.prefab");
@@ -138,7 +153,7 @@ namespace Demo.Editor {
                 File.Copy(linker, linkerFolder + "/link.xml", true);
             }
             AssetDatabase.Refresh();
-            Debug.Log("Built two YooAsset resource packages into StreamingAssets for the current target.");
+            Debug.Log("Built App and two game YooAsset resource packages into StreamingAssets for the current target.");
         }
 
         private static void ConfigureCollectors() {
@@ -164,7 +179,8 @@ namespace Demo.Editor {
                     CollectorGUID = AssetDatabase.AssetPathToGUID(folder),
                     CollectorType = ECollectorType.MainAssetCollector,
                     AddressRuleName = nameof(AddressByFileName),
-                    PackRuleName = nameof(PackDirectory),
+                    // Unity 不允许场景和普通资源放入同一个 AssetBundle。
+                    PackRuleName = item.Item1 == "game-b" ? nameof(PackSeparately) : nameof(PackDirectory),
                     FilterRuleName = nameof(CollectAll)
                 });
                 BundleCollectorSettingData.ModifyPackage(package);
@@ -177,6 +193,18 @@ namespace Demo.Editor {
             var foundation = new GameObject("ZFramework");
             var basic = new GameObject("Base"); basic.transform.SetParent(foundation.transform, false); basic.AddComponent<BaseComponent>();
             var pools = new GameObject("ObjectPool"); pools.transform.SetParent(foundation.transform, false); pools.AddComponent<ObjectPoolComponent>();
+            var events = new GameObject("Event"); events.transform.SetParent(foundation.transform, false); events.AddComponent<EventComponent>();
+            var fsm = new GameObject("Fsm"); fsm.transform.SetParent(foundation.transform, false); fsm.AddComponent<FsmComponent>();
+            var scenes = new GameObject("Scene"); scenes.transform.SetParent(foundation.transform, false); scenes.AddComponent<SceneComponent>();
+            var procedures = new GameObject("Procedure"); procedures.transform.SetParent(foundation.transform, false);
+            var procedure = procedures.AddComponent<ProcedureComponent>();
+            var serialized = new SerializedObject(procedure);
+            var types = new[] { typeof(ProcedureLaunch), typeof(ProcedureLogin), typeof(ProcedureLobby), typeof(ProcedureGame) };
+            var available = serialized.FindProperty("m_AvailableProcedureTypeNames");
+            available.arraySize = types.Length;
+            for (var i = 0; i < types.Length; i++) available.GetArrayElementAtIndex(i).stringValue = types[i].FullName;
+            serialized.FindProperty("m_EntranceProcedureTypeName").stringValue = typeof(ProcedureLaunch).FullName;
+            serialized.ApplyModifiedPropertiesWithoutUndo();
             var assets = new GameObject("Resource"); assets.transform.SetParent(foundation.transform, false);
             resource = assets.AddComponent<ResourceComponent>();
             resource.PackageName = "app";
@@ -236,6 +264,12 @@ namespace Demo.Editor {
             UnityEventTools.AddPersistentListener(button.onClick, action);
             Text(go.transform, "Label", label, 0, 0, 280);
             return button;
+        }
+
+        private static void SetString(UnityEngine.Object owner, string field, string value) {
+            var serialized = new SerializedObject(owner);
+            serialized.FindProperty(field).stringValue = value;
+            serialized.ApplyModifiedPropertiesWithoutUndo();
         }
 
         private static void Set(UnityEngine.Object owner, string field, UnityEngine.Object value) {

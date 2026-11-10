@@ -1,19 +1,16 @@
-using System;
 using System.Threading;
 using System.Threading.Tasks;
-using UnityEngine;
 
 namespace QFramework {
     /// <summary>放在游戏根 Prefab 上。业务初始化写在 OnEnterAsync，清理写在 OnExitAsync。</summary>
-    public abstract class GameEntry : MonoBehaviour, IController {
-        public Session Session { get; private set; }
-        public IGameResources Resources => this.GetUtility<IGameResources>();
-
-        public IArchitecture GetArchitecture() =>
-            Session ?? throw new InvalidOperationException("Game has not entered.");
+    public abstract class GameEntry : SessionBehaviour {
+        public IGameResources GameResources => this.GetUtility<IGameResources>();
 
         internal async Task EnterAsync(Session session, CancellationToken cancellation) {
-            Session = session;
+            foreach (var controller in GetComponentsInChildren<SessionBehaviour>(true)) {
+                controller.BindSession(session);
+            }
+
             await OnEnterAsync(cancellation);
         }
 

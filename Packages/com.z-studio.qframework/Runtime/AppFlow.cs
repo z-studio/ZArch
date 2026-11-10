@@ -34,6 +34,7 @@ namespace QFramework {
         private Task m_CloseTask;
 
         public AppState State { get; private set; }
+        public IArchitecture AppArchitecture => m_App;
         public Session UserSession => m_Authenticated ? m_User : null;
         public GameLauncher Games { get; private set; }
 
@@ -75,6 +76,12 @@ namespace QFramework {
         /// <summary>回调完成服务器认证，并向候选会话注册账号 Model/System。回调中不要刷新大厅。</summary>
         public async Task LoginAsync(Func<Session, CancellationToken, Task> authenticateAndConfigure,
             CancellationToken cancellation = default) {
+            await LoginAsync(authenticateAndConfigure, null, cancellation);
+        }
+
+        /// <summary>先认证并注册服务，再初始化 Session，最后等待账号数据/连接就绪；全部成功才进入大厅。</summary>
+        public async Task LoginAsync(Func<Session, CancellationToken, Task> authenticateAndConfigure,
+            Func<Session, CancellationToken, Task> prepareAccount, CancellationToken cancellation = default) {
             if (authenticateAndConfigure == null) {
                 throw new ArgumentNullException(nameof(authenticateAndConfigure));
             }
@@ -91,6 +98,10 @@ namespace QFramework {
                 // 即使服务器忽略取消并迟到返回，也不能发布已经注销的账号。
                 m_Operation.Token.ThrowIfCancellationRequested();
                 m_User.Initialize();
+                if (prepareAccount != null) {
+                    await prepareAccount(m_User, m_Operation.Token);
+                    m_Operation.Token.ThrowIfCancellationRequested();
+                }
                 Games = m_CreateGames(m_User) ?? throw new InvalidOperationException("No game launcher was created.");
                 m_Authenticated = true;
 
@@ -116,11 +127,15 @@ namespace QFramework {
         }
 
         public async Task OpenGameAsync(string id, CancellationToken cancellation = default) {
+            await OpenGameAsync(id, null, cancellation);
+        }
+
+        public async Task OpenGameAsync(string id, object arguments, CancellationToken cancellation = default) {
             Begin(cancellation, AppState.Lobby, AppState.Game);
             State = AppState.EnteringGame;
 
             try {
-                await Games.OpenAsync(id, m_Operation.Token);
+                await Games.OpenAsync(id, arguments, m_Operation.Token);
 
                 if (!m_CloseRequested) {
                     State = AppState.Game;

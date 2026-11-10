@@ -5,7 +5,8 @@
         "QFramework",
         "ZFramework",
         "ZFramework.Unity",
-        "UniTask"
+        "UniTask",
+        "YooAsset"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

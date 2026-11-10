@@ -6,217 +6,66 @@ using UnityEngine;
 using ZFramework.Unity;
 
 namespace Demo.App {
+    /// <summary>场景入口：连接业务和界面，接收 Inspector 中的按钮点击。</summary>
     public sealed class AppEntry : MonoBehaviour, IController {
-        [SerializeField]
-        private ResourceComponent m_Resource;
+        public static AppEntry Instance { get; private set; }
 
-        [SerializeField, Min(1)]
-        private float m_FoundationTimeoutSeconds = 60;
+        [SerializeField] private ResourceComponent m_Resource;
+        [SerializeField] private AppView m_View;
+        [SerializeField, Min(1)] private float m_FoundationTimeoutSeconds = 60;
+        private AppLogic m_Logic;
 
-        [SerializeField]
-        private GameObject m_LoginPanel;
+        public AppFlow Flow => m_Logic?.Flow;
+        private readonly TaskCompletionSource<bool> m_FirstStartup = new();
+        public Task Initialization => m_FirstStartup.Task;
+        public IArchitecture GetArchitecture() => Flow?.UserSession ?? m_Logic?.Architecture;
 
-        [SerializeField]
-        private GameObject m_LobbyPanel;
-
-        [SerializeField]
-        private UnityEngine.UI.Text m_Coins;
-
-        [SerializeField]
-        private UnityEngine.UI.Text m_Status;
-
-        [SerializeField]
-        private UnityEngine.UI.Text m_Account;
-
-        [SerializeField]
-        private UnityEngine.UI.Button[] m_GameButtons;
-
-        [SerializeField]
-        private UnityEngine.UI.Button[] m_LoginButtons;
-
-        [SerializeField]
-        private UnityEngine.UI.Button m_Logout;
-
-        [SerializeField]
-        private UnityEngine.UI.Button m_Return;
-
-        [SerializeField]
-        private UnityEngine.UI.Button m_Retry;
-
-        private IAppBackend m_Backend;
-        private IArchitecture m_App;
-        private Session m_BoundAccount;
-        private IUnregister m_WalletSubscription;
-        private AppState m_LastState = (AppState)(-1);
-        private Task m_Shutdown;
-        private bool m_Stopping;
-        public AppFlow Flow { get; private set; }
-        public Task Initialization { get; private set; }
-        public IArchitecture GetArchitecture() => Flow?.UserSession ?? m_App;
-
-        private void Start() {
-            m_Backend = new DemoBackend();
-            m_App = DemoApp.Interface;
-            Flow = new AppFlow(m_App, user => new GameLauncher(user,
-                    new ZFrameworkGamePackageLoader(m_Resource), m_App.GetModel<ServerSettingsModel>().settings.games),
-                user => m_Backend.CloseAccountAsync(user.GetModel<AccountModel>()));
-            Initialization = Flow.StartAsync(PrepareAsync);
-            ObserveInitialization();
-            Refresh();
+        private void Awake() {
+            Instance = this;
+            // 接真实服务器时，将 DemoBackend 替换成 IAppBackend 的实际实现。
+            m_Logic = new AppLogic(m_Resource, new DemoBackend(), m_FoundationTimeoutSeconds);
+        }
+        // 启动 Procedure 调用一次；失败时由 RetryStartup 按钮重试。
+        public void StartApp() => Run(StartAppAsync);
+        private async Task StartAppAsync() {
+            try { await m_Logic.StartAsync(); m_FirstStartup.TrySetResult(true); }
+            catch (Exception error) { m_FirstStartup.TrySetException(error); throw; }
         }
 
-        private async void ObserveInitialization() {
-            try {
-                await Initialization;
-            } catch (OperationCanceledException) {
-            } catch (Exception error) {
-                Debug.LogException(error, this);
-            }
-        }
-
-        private async Task PrepareAsync(CancellationToken cancellation) {
-            if (!m_Resource) {
-                throw new InvalidOperationException("Assign the App ZFramework ResourceComponent.");
-            }
-
-            var settings = await m_Backend.LoadSettingsAsync(cancellation);
-            cancellation.ThrowIfCancellationRequested();
-            m_App.GetModel<ServerSettingsModel>().settings = settings;
-            var deadline = Time.realtimeSinceStartup + m_FoundationTimeoutSeconds;
-
-            while (!m_Resource.IsInitialized) {
-                cancellation.ThrowIfCancellationRequested();
-
-                if (Time.realtimeSinceStartup >= deadline) {
-                    throw new TimeoutException(
-                        "ZFramework resources did not initialize. Check the foundation configuration before retrying startup.");
-                }
-
-                await Task.Yield();
-            }
-
-            try {
-                await m_Resources.InitializeAsync(m_Resource, settings.games, cancellation);
-            } catch (Exception error) {
-                try {
-                    await m_Resources.ShutdownAsync(m_Resource);
-                } catch (Exception cleanup) {
-                    throw new AggregateException(error, cleanup);
-                }
-
-                throw;
-            }
-        }
-
-        private readonly SampleGameResources m_Resources = new();
+        // 按钮绑定这些命名方法；点击后发生什么，可从这里直接跳到业务方法。
+        public void LoginAlice() => Run(() => LoginAsync("Alice"));
+        public void LoginBob() => Run(() => LoginAsync("Bob"));
+        public void OpenGameA() => Run(() => Flow.OpenGameAsync("game-a", new GameLaunchData("demo-room-a")));
+        public void OpenGameB() => Run(() => Flow.OpenGameAsync("game-b", new GameLaunchData("demo-room-b")));
+        public void ReturnToLobby() => Run(() => Flow.ReturnToLobbyAsync());
+        public void Logout() => Run(() => Flow.LogoutAsync());
+        public void RetryStartup() => Run(StartAppAsync);
 
         public Task LoginAsync(string account, CancellationToken cancellation = default) =>
-            Flow.LoginAsync(async (user, token) => {
-                var data = await m_Backend.LoginAsync(account, token);
-                token.ThrowIfCancellationRequested();
-                user.RegisterModel(new AccountModel(data));
-                user.RegisterModel(new WalletModel(data.coins));
-            }, cancellation);
+            m_Logic.LoginAsync(account, cancellation);
+        public Task ShutdownAsync() => m_Logic?.ShutdownAsync() ?? Task.CompletedTask;
 
-        public void LoginAlice() => Observe(() => LoginAsync("Alice"));
-        public void LoginBob() => Observe(() => LoginAsync("Bob"));
-        public void OpenGameA() => Observe(() => Flow.OpenGameAsync("game-a"));
-        public void OpenGameB() => Observe(() => Flow.OpenGameAsync("game-b"));
-        public void ReturnToLobby() => Observe(() => Flow.ReturnToLobbyAsync());
-        public void Logout() => Observe(() => Flow.LogoutAsync());
-        public void RetryStartup() => Observe(() => Flow.StartAsync(PrepareAsync));
+        // Procedure 每帧调用，显示跟随 Flow；业务按钮仍走下方统一错误处理。
+        public void RenderView() => RefreshView();
+        private void RefreshView() {
+            if (m_View && m_Logic != null) m_View.Render(Flow, m_Logic.IsStopping, m_Logic.PackageProgress);
+        }
 
-        private async void Observe(Func<Task> action) {
-            try {
-                await action();
-            } catch (OperationCanceledException) {
-            } catch (Exception error) {
+        // async void 只用于 Unity 按钮入口。业务方法返回 Task，错误在这里显示。
+        private async void Run(Func<Task> action) {
+            if (m_View) m_View.ClearError();
+            try { await action(); }
+            catch (OperationCanceledException) { /* 注销主动取消请求，属于正常流程。 */ }
+            catch (Exception error) {
+                if (m_View) m_View.ShowError(error.Message);
                 Debug.LogException(error, this);
             }
-
-            if (this) {
-                Refresh();
-            }
+            RefreshView();
         }
-
-        private void Update() {
-            if (Flow != null
-                && (m_LastState != Flow.State || !ReferenceEquals(m_BoundAccount, Flow.UserSession))) {
-                Refresh();
-            }
-        }
-
-        private void Refresh() {
-            m_LastState = Flow.State;
-
-            if (!ReferenceEquals(m_BoundAccount, Flow.UserSession)) {
-                m_WalletSubscription?.Unregister();
-                m_BoundAccount = Flow.UserSession;
-                m_WalletSubscription = m_BoundAccount?.Track(m_BoundAccount.GetModel<WalletModel>().coins
-                    .RegisterAndInvoke(value => m_Coins.text = $"Coins: {value}"));
-            }
-
-            var hasAccount = Flow.State == AppState.Lobby || Flow.State == AppState.Game
-                                                          || Flow.State == AppState.EnteringGame
-                                                          || Flow.State == AppState.LeavingGame
-                                                          || Flow.State == AppState.GameCloseFailed;
-            m_LoginPanel.SetActive(!hasAccount);
-            m_LobbyPanel.SetActive(hasAccount);
-            m_Status.text = Flow.State.ToString();
-            m_Retry.gameObject.SetActive(!m_Stopping && Flow.State == AppState.Created);
-            m_Account.text = hasAccount
-                ? m_BoundAccount.GetModel<AccountModel>().AccountId
-                : Flow.State == AppState.LoggingOut
-                    ? "Closing account..."
-                    : Flow.State == AppState.LogoutFailed
-                        ? "Cleanup failed - retry logout"
-                        : "Signed out";
-            m_Coins.gameObject.SetActive(hasAccount);
-
-            foreach (var button in m_LoginButtons) {
-                button.interactable = !m_Stopping && Flow.State == AppState.Login;
-            }
-
-            foreach (var button in m_GameButtons) {
-                button.interactable = !m_Stopping && (Flow.State == AppState.Lobby || Flow.State == AppState.Game);
-            }
-
-            m_Return.interactable =
-                !m_Stopping && (Flow.State == AppState.Game || Flow.State == AppState.GameCloseFailed);
-            // 注销可打断登录和游戏加载，也可重试失败的清理。
-            m_Logout.interactable = !m_Stopping && Flow.State != AppState.Login && Flow.State != AppState.Created
-                                    && Flow.State != AppState.Starting
-                                    && Flow.State != AppState.Closed && Flow.State != AppState.LoggingOut;
-        }
-
-        public Task ShutdownAsync() {
-            m_Stopping = true;
-
-            if (m_Shutdown == null || m_Shutdown.IsFaulted) {
-                m_Shutdown = ShutdownCoreAsync();
-            }
-
-            return m_Shutdown;
-        }
-
-        private async Task ShutdownCoreAsync() {
-            if (Flow != null) {
-                await Flow.ShutdownAsync();
-            }
-
-            m_WalletSubscription?.Unregister();
-            m_WalletSubscription = null;
-            await m_Resources.ShutdownAsync(m_Resource);
-            m_App?.Deinit();
-            m_App = null;
-        }
-
         private async void OnDestroy() {
-            try {
-                await ShutdownAsync();
-            } catch (Exception error) {
-                Debug.LogException(error);
-            }
+            if (Instance == this) Instance = null;
+            try { await ShutdownAsync(); }
+            catch (Exception error) { Debug.LogException(error); }
         }
     }
 }
