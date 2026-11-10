@@ -9,7 +9,11 @@
     "Unity.ugui",
     "YooAsset",
     "QFramework.Games.YooAsset",
-    "YooAsset.Editor"
+    "YooAsset.Editor",
+    "QFramework.ZFramework",
+    "ZFramework",
+    "ZFramework.Unity",
+    "UniTask"
   ],
   "includePlatforms": [
     "Editor"

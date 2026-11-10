@@ -1,9 +1,11 @@
 {
-    "name": "QFramework.YooAsset",
+    "name": "QFramework.ZFramework",
     "rootNamespace": "QFramework",
     "references": [
         "QFramework",
-        "YooAsset"
+        "ZFramework",
+        "ZFramework.Unity",
+        "UniTask"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

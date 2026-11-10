@@ -1,27 +1,24 @@
-# QFramework：子会话与独立游戏包
+# ZFramework 基础，QFramework 业务
 
-一个 App 主架构管理大厅和共享服务。每次进入游戏创建子会话，游戏共享钱包、账号和网络，退出时释放本地状态与资源句柄。默认使用 YooAsset 3.0.7。
+启动读取服务器配置 → 登录 → 大厅 → 进入游戏 → 返回大厅；注销会关闭游戏、清理账号，再回到登录界面，可以重登或换账号。
 
 ```text
-Packages/com.z-studio.qframework/
-  Runtime/                    框架、子会话、游戏加载和资源适配器
-  README.md                   完整接入说明
-
-Assets/SessionDemo/
-  App/                        大厅场景、共享钱包和资源初始化
-  GameA/                      游戏 A 的代码、入口资源和 Prefab
-  GameB/                      游戏 B 的代码、入口资源和 Prefab
-  Editor/                     示例生成器、收集配置和裁剪保留配置
+App 常驻架构
+  └─ 账号会话（每次登录新建）
+       └─ 游戏会话（每次进入新建）
 ```
 
-App、GameA、GameB 是三个独立程序集，只有游戏依赖 App。每个游戏的代码和资源放在同一个目录。
+ZFramework.Unity 统一提供资源池、UI、实体、声音、场景和网络。QFramework 保留 Model / System / Command / Query 业务规范，接入层记录游戏拥有的资源引用。
 
-## 运行
+- `Packages/com.z-studio.qframework/Runtime`：框架、流程和 ZFramework 接入。
+- `Assets/SessionDemo/App`：启动、登录、大厅与账号数据。
+- `Assets/SessionDemo/GameA`、`GameB`：独立程序集的游戏代码和资源。
+- `Assets/SessionDemo/Editor`：场景生成、资源收集和构建。
 
-打开 [Lobby 场景](Assets/SessionDemo/App/Lobby.unity)，点击 Play。进入 A 玩一局，再切换 B、返回大厅、重进 A：钱包保留，游戏回合重置。
+直接运行 [App 场景](Assets/SessionDemo/App/App.unity)。先以 Alice 登录玩一局，再注销并以 Bob 登录，检查钱包和回合是否重新建立。
 
-编辑器使用 YooAsset 模拟模式。构建 Player 前，先执行 **QFramework → Sessions → Build Demo YooAsset Packages**。
+示例使用明确的模拟后端 `IAppBackend / DemoBackend`，不连接真实认证服务器。生产项目在此接入服务器配置和登录协议。编辑器使用 ZFramework 的资源模拟模式；构建 Player 前执行 **QFramework → Sessions → Build Demo YooAsset Packages**。
 
-需要重建示例时，先保存或关闭未命名场景，再执行 **QFramework → Sessions → Create Lobby And Games Demo**。
+当前工程通过 UPM 引用本机 ZFramework、ZFramework.Unity、UniTask、UniUtils、Shell 包，不复制基础框架源码。其他机器需要先安装同一套基础依赖，再安装本包。
 
-依赖安装、子会话、事件、加载器和资源生命周期统一见 [框架使用说明](Packages/com.z-studio.qframework/README.md)。
+完整职责、生命周期、资源所有权和接入方式见 [框架说明](Packages/com.z-studio.qframework/README.md)。验证方法见 [Tests/Unity](Tests/Unity/README.md)。

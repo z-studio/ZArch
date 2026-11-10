@@ -1,5 +1,11 @@
 {
   "dependencies": {
+    "com.cysharp.unitask": {
+      "version": "file:/Users/sinonet/Documents/GitHub/ZFramework/Packages/UniTask",
+      "depth": 0,
+      "source": "local",
+      "dependencies": {}
+    },
     "com.tuyoogame.yooasset": {
       "version": "https://github.com/tuyoogame/YooAsset.git?path=Assets/YooAsset#3.0.7",
       "depth": 0,
@@ -242,7 +248,38 @@
       "source": "embedded",
       "dependencies": {
         "com.tuyoogame.yooasset": "3.0.7",
-        "com.unity.ugui": "2.0.0"
+        "com.unity.ugui": "2.0.0",
+        "com.z-studio.zframework": "1.0.0",
+        "com.z-studio.zframework.unity": "1.0.0",
+        "com.cysharp.unitask": "2.5.11",
+        "com.z-studio.uniutils": "1.0.0",
+        "com.z-studio.unikit.shell": "1.0.0"
+      }
+    },
+    "com.z-studio.unikit.shell": {
+      "version": "file:/Users/sinonet/Documents/GitHub/UniKit/Packages/com.z-studio.unikit.shell",
+      "depth": 0,
+      "source": "local",
+      "dependencies": {}
+    },
+    "com.z-studio.uniutils": {
+      "version": "file:/Users/sinonet/Documents/GitHub/UniUtils/Packages/com.z-studio.uniutils",
+      "depth": 0,
+      "source": "local",
+      "dependencies": {}
+    },
+    "com.z-studio.zframework": {
+      "version": "file:/Users/sinonet/Documents/GitHub/ZFramework/Packages/com.z-studio.zframework",
+      "depth": 0,
+      "source": "local",
+      "dependencies": {}
+    },
+    "com.z-studio.zframework.unity": {
+      "version": "file:/Users/sinonet/Documents/GitHub/ZFramework/Packages/com.z-studio.zframework.unity",
+      "depth": 0,
+      "source": "local",
+      "dependencies": {
+        "com.unity.nuget.newtonsoft-json": "3.2.2"
       }
     },
     "com.unity.modules.accessibility": {

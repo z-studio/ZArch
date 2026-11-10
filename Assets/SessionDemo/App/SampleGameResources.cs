@@ -1,94 +1,56 @@
 using System;
 using System.Collections.Generic;
+using System.Threading;
 using System.Threading.Tasks;
 using QFramework;
+using ZFramework.Unity;
 using YooAsset;
 
 namespace Demo.App {
-    /// <summary>示例 App 的资源准备。正式项目在这里接入自己的版本更新与下载流程。</summary>
+    /// <summary>示例 App 使用 ZFramework 准备资源包；注销不销毁 App 基础服务。</summary>
     public sealed class SampleGameResources {
-        private readonly List<ResourcePackage> m_OwnedPackages = new();
+        private readonly List<string> m_OwnedPackages = new();
 
-        public async Task InitializeAsync(IEnumerable<GameInfo> games) {
-            if (!YooAssets.IsInitialized) {
-                YooAssets.Initialize();
-            }
-
+        public async Task InitializeAsync(ResourceComponent resource, IEnumerable<GameInfo> games,
+            CancellationToken cancellation) {
             foreach (var game in games) {
-                if (YooAssets.TryGetPackage(game.id, out var existing)) {
-                    if (existing.InitializeStatus != EOperationStatus.Succeeded) {
-                        throw new InvalidOperationException($"Existing package '{game.id}' is not ready.");
-                    }
+                cancellation.ThrowIfCancellationRequested();
 
+                if (m_OwnedPackages.Contains(game.id)) {
                     continue;
                 }
 
-                var package = YooAssets.CreatePackage(game.id);
-                m_OwnedPackages.Add(package);
-#if UNITY_EDITOR
-                var build = EditorSimulateBuildInvoker.Build(game.id, (int)EBundleType.VirtualAssetBundle);
-                var options = new EditorSimulateModeOptions {
-                    EditorFileSystemParameters =
-                        FileSystemParameters.CreateDefaultEditorFileSystemParameters(build.PackageRootDirectory),
-                    AutoUnloadBundleWhenUnused = true
-                };
-#else
-                // 随包资源示例；联网项目由 App 换成 HostPlayModeOptions 并处理下载。
-                var options = new OfflinePlayModeOptions {
-                    BuiltinFileSystemParameters = FileSystemParameters.CreateDefaultBuiltinFileSystemParameters(),
-                    AutoUnloadBundleWhenUnused = true
-                };
-#endif
-                var initialize = package.InitializePackageAsync(options);
+                // 项目若已准备这些包，应复用既有包；不要在这里重复初始化。
+                if (YooAssets.TryGetPackage(game.id, out var existing)) {
+                    if (existing.InitializeStatus == EOperationStatus.Succeeded && existing.PackageValid) {
+                        continue;
+                    }
 
-                while (!initialize.IsDone) {
-                    await Task.Yield();
+                    throw new InvalidOperationException(
+                        $"Existing package '{game.id}' is not ready; its owner must prepare it first.");
                 }
 
-                if (initialize.Status != EOperationStatus.Succeeded) {
-                    throw new InvalidOperationException(initialize.Error);
-                }
+                m_OwnedPackages.Add(game.id);
+                var operation = await resource.InitPackage(game.id, resource.PlayMode, true);
+                cancellation.ThrowIfCancellationRequested();
 
-                var version = package.RequestPackageVersionAsync();
-
-                while (!version.IsDone) {
-                    await Task.Yield();
-                }
-
-                if (version.Status != EOperationStatus.Succeeded) {
-                    throw new InvalidOperationException(version.Error);
-                }
-
-                var manifest =
-                    package.LoadPackageManifestAsync(new LoadPackageManifestOptions(version.PackageVersion, 60));
-
-                while (!manifest.IsDone) {
-                    await Task.Yield();
-                }
-
-                if (manifest.Status != EOperationStatus.Succeeded) {
-                    throw new InvalidOperationException(manifest.Error);
+                if (operation == null || operation.Status != EOperationStatus.Succeeded
+                                      || !resource.GetPackage(game.id).PackageValid) {
+                    throw new InvalidOperationException($"Cannot prepare package '{game.id}'.");
                 }
             }
         }
 
-        public async Task ShutdownAsync() {
-            for (var i = m_OwnedPackages.Count - 1; i >= 0; i--) {
-                var package = m_OwnedPackages[i];
-                var destroy = package.DestroyPackageAsync();
-
-                while (!destroy.IsDone) {
-                    await Task.Yield();
-                }
-
-                if (destroy.Status != EOperationStatus.Succeeded) {
-                    throw new InvalidOperationException(destroy.Error);
-                }
-
-                YooAssets.RemovePackage(package.PackageName);
-                m_OwnedPackages.RemoveAt(i);
+        public async Task ShutdownAsync(ResourceComponent resource) {
+            if (!resource || !resource.IsInitialized) {
+                return;
             }
-            // 不调用 YooAssets.Destroy：全局驱动可能仍被 App 中其他资源使用者持有。
+
+            while (m_OwnedPackages.Count > 0) {
+                var index = m_OwnedPackages.Count - 1;
+                await resource.DestroyPackageAsync(m_OwnedPackages[index]);
+                m_OwnedPackages.RemoveAt(index);
+            }
         }
     }
 }

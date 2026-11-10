@@ -17,7 +17,7 @@ MonoBehaviour:
   UniqueBundleName: 0
   Packages:
   - PackageName: game-a
-    PackageDesc: 
+    PackageDesc:
     EnableAddressable: 1
     SupportExtensionless: 1
     LocationToLower: 0
@@ -26,8 +26,8 @@ MonoBehaviour:
     IgnoreRuleName: NormalIgnoreRule
     Groups:
     - GroupName: SessionDemo
-      GroupDesc: 
-      AssetTags: 
+      GroupDesc:
+      AssetTags:
       ActiveRuleName: EnableGroup
       Collectors:
       - CollectPath: Assets/SessionDemo/GameA
@@ -36,10 +36,10 @@ MonoBehaviour:
         AddressRuleName: AddressByFileName
         PackRuleName: PackDirectory
         FilterRuleName: CollectAll
-        AssetTags: 
-        UserData: 
+        AssetTags:
+        UserData:
   - PackageName: game-b
-    PackageDesc: 
+    PackageDesc:
     EnableAddressable: 1
     SupportExtensionless: 1
     LocationToLower: 0
@@ -48,8 +48,8 @@ MonoBehaviour:
     IgnoreRuleName: NormalIgnoreRule
     Groups:
     - GroupName: SessionDemo
-      GroupDesc: 
-      AssetTags: 
+      GroupDesc:
+      AssetTags:
       ActiveRuleName: EnableGroup
       Collectors:
       - CollectPath: Assets/SessionDemo/GameB
@@ -58,5 +58,27 @@ MonoBehaviour:
         AddressRuleName: AddressByFileName
         PackRuleName: PackDirectory
         FilterRuleName: CollectAll
-        AssetTags: 
-        UserData: 
+        AssetTags:
+        UserData:
+  - PackageName: app
+    PackageDesc:
+    EnableAddressable: 1
+    SupportExtensionless: 1
+    LocationToLower: 0
+    IncludeAssetGUID: 0
+    AutoCollectShaders: 1
+    IgnoreRuleName: NormalIgnoreRule
+    Groups:
+    - GroupName: SessionDemo
+      GroupDesc:
+      AssetTags:
+      ActiveRuleName: EnableGroup
+      Collectors:
+      - CollectPath: Assets/SessionDemo/App/Content
+        CollectorGUID: dd361145fcce04fdd82fdab23d599a9e
+        CollectorType: 0
+        AddressRuleName: AddressByFileName
+        PackRuleName: PackDirectory
+        FilterRuleName: CollectAll
+        AssetTags:
+        UserData:

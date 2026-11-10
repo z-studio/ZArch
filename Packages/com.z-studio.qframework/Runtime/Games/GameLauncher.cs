@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 namespace QFramework {
     /// <summary>一次运行一个游戏。App 只依赖这些接口，不引用任何具体游戏类型。</summary>
     public sealed class GameLauncher {
-        private readonly IArchitecture m_App;
+        private readonly IArchitecture m_Parent;
         private readonly IGamePackageLoader m_Loader;
         private readonly Dictionary<string, GameInfo> m_Games = new(StringComparer.Ordinal);
         private readonly SemaphoreSlim m_Gate = new(1, 1);
@@ -19,8 +19,8 @@ namespace QFramework {
         public string CurrentGameId { get; private set; }
         public Session CurrentSession { get; private set; }
 
-        public GameLauncher(IArchitecture app, IGamePackageLoader loader, IEnumerable<GameInfo> games) {
-            m_App = app ?? throw new ArgumentNullException(nameof(app));
+        public GameLauncher(IArchitecture parent, IGamePackageLoader loader, IEnumerable<GameInfo> games) {
+            m_Parent = parent ?? throw new ArgumentNullException(nameof(parent));
             m_Loader = loader ?? throw new ArgumentNullException(nameof(loader));
 
             if (games == null) {
@@ -60,7 +60,7 @@ namespace QFramework {
                     m_Package = await m_Loader.LoadAsync(info, linked.Token)
                                 ?? throw new InvalidOperationException("Loader returned no package.");
                     linked.Token.ThrowIfCancellationRequested();
-                    CurrentSession = new Session(m_App, id);
+                    CurrentSession = new Session(m_Parent, id);
                     m_Package.Configure(CurrentSession);
                     CurrentSession.Initialize();
                     m_Game = m_Package.CreateGame() ?? throw new InvalidOperationException("Package returned no game.");
@@ -91,7 +91,7 @@ namespace QFramework {
             }
         }
 
-        // App 必须先 await 此方法，再调用 QF App.Deinit()。
+        // 释放所属账号会话前必须先 await 此方法。
         // 若关闭失败，保留资源及服务，允许再次调用重试。
         public async Task ShutdownAsync() {
             if (State == GameState.Closed) {

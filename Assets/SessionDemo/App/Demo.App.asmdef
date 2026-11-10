@@ -1,19 +1,22 @@
 {
-    "name": "Demo.App",
-    "rootNamespace": "Demo.App",
-    "references": [
-        "QFramework",
-        "Unity.ugui",
-        "YooAsset",
-        "QFramework.YooAsset"
-    ],
-    "includePlatforms": [],
-    "excludePlatforms": [],
-    "allowUnsafeCode": false,
-    "overrideReferences": false,
-    "precompiledReferences": [],
-    "autoReferenced": true,
-    "defineConstraints": [],
-    "versionDefines": [],
-    "noEngineReferences": false
+  "name": "Demo.App",
+  "rootNamespace": "Demo.App",
+  "references": [
+    "QFramework",
+    "Unity.ugui",
+    "YooAsset",
+    "QFramework.ZFramework",
+    "ZFramework",
+    "ZFramework.Unity",
+    "UniTask"
+  ],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false
 }

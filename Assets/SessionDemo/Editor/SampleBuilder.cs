@@ -13,18 +13,19 @@ using UnityEngine.Events;
 using UnityEngine.SceneManagement;
 using YooAsset;
 using YooAsset.Editor;
+using ZFramework.Unity;
 
 namespace Demo.Editor {
     public static class SampleBuilder {
         public const string Root = "Assets/SessionDemo";
-        public const string LobbyPath = Root + "/App/Lobby.unity";
+        public const string AppPath = Root + "/App/App.unity";
 
         [MenuItem("QFramework/Sessions/Create Lobby And Games Demo")]
         public static void Build() {
             for (var i = 0; i < SceneManager.sceneCount; i++)
                 if (string.IsNullOrEmpty(SceneManager.GetSceneAt(i).path))
                     throw new InvalidOperationException("Save or close untitled scenes before generating the demo.");
-            Directory.CreateDirectory(Root + "/App");
+            Directory.CreateDirectory(Root + "/App/Content");
             Directory.CreateDirectory(Root + "/GameA");
             Directory.CreateDirectory(Root + "/GameB");
             AssetDatabase.Refresh();
@@ -35,46 +36,44 @@ namespace Demo.Editor {
             try {
                 BuildGame<GameAEntry, GameADefinition>("GameA", entry => entry.PlayRound);
                 BuildGame<GameBEntry, GameBDefinition>("GameB", entry => entry.PlayRound);
-                var root = new GameObject("App").AddComponent<LobbyEntry>();
+
+                BuildFoundation(out var resource);
+                var root = new GameObject("App").AddComponent<AppEntry>();
                 root.gameObject.AddComponent<SampleInput>();
+                Set(root, "m_Resource", resource);
                 var canvas = Canvas(root.transform, 0);
-                Text(canvas, "Title", "QFramework + Sessions", -210, 230, 440);
-                Set(root, "m_Coins", Text(canvas, "Coins", "App coins: 100", -210, 160));
-                Set(root, "m_Status", Text(canvas, "Status", "Lobby", -210, 100));
-                var buttons = new[] {
-                    Button(canvas, "OpenGameA", "Open Game A", -210, 25, root.OpenGameA),
-                    Button(canvas, "OpenGameB", "Open Game B", -210, -45, root.OpenGameB),
-                    Button(canvas, "ReturnToLobby", "Return to lobby", -210, -115, root.ReturnToLobby)
-                };
-                var serialized = new SerializedObject(root);
-                var array = serialized.FindProperty("m_Buttons");
-                array.arraySize = buttons.Length;
-                for (var i = 0; i < buttons.Length; i++)
-                    array.GetArrayElementAtIndex(i).objectReferenceValue = buttons[i];
-                var games = serialized.FindProperty("m_Games");
-                games.arraySize = 2;
-
-                for (var i = 0; i < 2; i++) {
-                    var game = games.GetArrayElementAtIndex(i);
-                    game.FindPropertyRelative("id").stringValue = i == 0 ? "game-a" : "game-b";
-                    game.FindPropertyRelative("entryAddress").stringValue =
-                        "Entry";
-                }
-
-                serialized.ApplyModifiedPropertiesWithoutUndo();
-                Text(canvas, "Hint", "Shared wallet / Fresh rounds on re-entry", 0, -230, 850);
-                EditorSceneManager.SaveScene(scene, LobbyPath);
+                Set(root, "m_Status", Text(canvas, "Status", "Starting", -210, 245));
+                Set(root, "m_Account", Text(canvas, "Account", "Signed out", -210, 185));
+                Set(root, "m_Coins", Text(canvas, "Coins", "Coins: 0", -210, 130));
+                var login = new GameObject("LoginPanel", typeof(RectTransform));
+                login.transform.SetParent(canvas, false);
+                Set(root, "m_LoginPanel", login);
+                SetArray(root, "m_LoginButtons",
+                    Button(login.transform, "LoginAlice", "Login as Alice", -210, 35, root.LoginAlice),
+                    Button(login.transform, "LoginBob", "Login as Bob", -210, -40, root.LoginBob));
+                var lobby = new GameObject("LobbyPanel", typeof(RectTransform));
+                lobby.transform.SetParent(canvas, false);
+                Set(root, "m_LobbyPanel", lobby);
+                SetArray(root, "m_GameButtons",
+                    Button(lobby.transform, "OpenGameA", "Open Game A", -210, 35, root.OpenGameA),
+                    Button(lobby.transform, "OpenGameB", "Open Game B", -210, -40, root.OpenGameB));
+                Set(root, "m_Return", Button(lobby.transform, "ReturnToLobby", "Return to lobby", -210, -115, root.ReturnToLobby));
+                Set(root, "m_Logout", Button(canvas, "Logout", "Logout / Cancel login", -210, -200, root.Logout));
+                Set(root, "m_Retry", Button(canvas, "RetryStartup", "Retry startup", 210, -200, root.RetryStartup));
+                Text(canvas, "Hint", "App > Account > Game / ZFramework resources", 0, -270, 850);
+                EditorSceneManager.SaveScene(scene, AppPath);
             } finally {
                 EditorSceneManager.CloseScene(scene, true);
                 if (previous.IsValid()) SceneManager.SetActiveScene(previous);
             }
 
-            var scenes = EditorBuildSettings.scenes.Where(s => s.path != LobbyPath).ToList();
-            scenes.Add(new EditorBuildSettingsScene(LobbyPath, true));
+            var scenes = EditorBuildSettings.scenes.Where(s => s.path != AppPath).ToList();
+            scenes.RemoveAll(item => item.path == Root + "/App/Lobby.unity");
+            scenes.Add(new EditorBuildSettingsScene(AppPath, true));
             EditorBuildSettings.scenes = scenes.ToArray();
             ConfigureCollectors();
             AssetDatabase.SaveAssets();
-            Debug.Log($"Saved {LobbyPath} and two game resource packages. Open Lobby and press Play.");
+            Debug.Log($"Saved {AppPath} and App, login and two games. Open App and press Play.");
         }
 
         private static void BuildGame<TEntry, TDefinition>(string name, Func<TEntry, UnityAction> play)
@@ -99,6 +98,10 @@ namespace Demo.Editor {
                 }
 
                 Set(definition, "m_Prefab", prefab.GetComponent<TEntry>());
+                File.WriteAllText(folder + "/GameConfig.txt", name + " dynamic resource");
+                var marker = new GameObject("Marker");
+                PrefabUtility.SaveAsPrefabAsset(marker, folder + "/Marker.prefab");
+                UnityEngine.Object.DestroyImmediate(marker);
             } finally {
                 UnityEngine.Object.DestroyImmediate(root);
             }
@@ -107,11 +110,11 @@ namespace Demo.Editor {
 
         [MenuItem("QFramework/Sessions/Build Demo YooAsset Packages")]
         public static void BuildResourcePackages() {
-            if (!File.Exists(LobbyPath))
+            if (!File.Exists(AppPath))
                 throw new InvalidOperationException("Generate the demo scene and resources first.");
             ConfigureCollectors();
             var version = DateTime.UtcNow.ToString("yyyyMMddHHmmssfff");
-            foreach (var id in new[] { "game-a", "game-b" }) {
+            foreach (var id in new[] { "app", "game-a", "game-b" }) {
                 var parameters = new ScriptableBuildParameters {
                     BuildOutputRoot = BundleBuilderHelper.GetDefaultBuildOutputRoot(),
                     BundledFileRoot = BundleBuilderHelper.GetStreamingAssetsRoot(),
@@ -139,12 +142,15 @@ namespace Demo.Editor {
         }
 
         private static void ConfigureCollectors() {
+            Directory.CreateDirectory(Root + "/App/Content");
+            File.WriteAllText(Root + "/App/Content/AppInfo.txt", "App common content");
+            AssetDatabase.Refresh();
             if (!BundleCollectorSettingData.HasSettingAsset()) {
                 Directory.CreateDirectory(Root + "/Editor");
                 var setting = ScriptableObject.CreateInstance<BundleCollectorSetting>();
                 AssetDatabase.CreateAsset(setting, Root + "/Editor/BundleCollectorSetting.asset");
             }
-            foreach (var item in new[] { ("game-a", "GameA"), ("game-b", "GameB") }) {
+            foreach (var item in new[] { ("app", "App/Content"), ("game-a", "GameA"), ("game-b", "GameB") }) {
                 var package = BundleCollectorSettingData.Setting.Packages.FirstOrDefault(p => p.PackageName == item.Item1);
                 if (package == null) package = BundleCollectorSettingData.CreatePackage(item.Item1);
                 package.EnableAddressable = true;
@@ -164,6 +170,24 @@ namespace Demo.Editor {
                 BundleCollectorSettingData.ModifyPackage(package);
             }
             BundleCollectorSettingData.SaveFile();
+        }
+
+
+        private static void BuildFoundation(out ResourceComponent resource) {
+            var foundation = new GameObject("ZFramework");
+            var basic = new GameObject("Base"); basic.transform.SetParent(foundation.transform, false); basic.AddComponent<BaseComponent>();
+            var pools = new GameObject("ObjectPool"); pools.transform.SetParent(foundation.transform, false); pools.AddComponent<ObjectPoolComponent>();
+            var assets = new GameObject("Resource"); assets.transform.SetParent(foundation.transform, false);
+            resource = assets.AddComponent<ResourceComponent>();
+            resource.PackageName = "app";
+            resource.PlayMode = EPlayMode.EditorSimulateMode;
+            resource.AutoUnloadBundleWhenUnused = true;
+        }
+        private static void SetArray(UnityEngine.Object owner, string field, params UnityEngine.Object[] values) {
+            var serialized = new SerializedObject(owner);
+            var array = serialized.FindProperty(field); array.arraySize = values.Length;
+            for (var i = 0; i < values.Length; i++) array.GetArrayElementAtIndex(i).objectReferenceValue = values[i];
+            serialized.ApplyModifiedPropertiesWithoutUndo();
         }
 
         private static Transform Canvas(Transform parent, int order) {
