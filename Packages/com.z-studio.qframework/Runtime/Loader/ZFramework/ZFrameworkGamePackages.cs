@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using YooAsset;
+using UnityEngine;
 using ZFramework.Unity;
 
 namespace QFramework {
@@ -37,6 +38,33 @@ namespace QFramework {
         public ZFrameworkGamePackages(ResourceComponent resource, Func<GameInfo, EPlayMode> playMode = null) {
             m_Resource = resource ? resource : throw new ArgumentNullException(nameof(resource));
             m_PlayMode = playMode ?? (_ => resource.PlayMode);
+        }
+
+        /// <summary>等待项目已有资源组件就绪，不创建组件或下载游戏；启动失败可重试。</summary>
+        public async Task WaitForReadyAsync(float timeoutSeconds = 60, CancellationToken cancellation = default) {
+            if (timeoutSeconds <= 0 || float.IsNaN(timeoutSeconds) || float.IsInfinity(timeoutSeconds)) {
+                throw new ArgumentOutOfRangeException(nameof(timeoutSeconds));
+            }
+
+            if (m_Closing) {
+                throw new ObjectDisposedException(nameof(ZFrameworkGamePackages));
+            }
+
+            using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellation, m_Lifetime.Token);
+            var deadline = Time.realtimeSinceStartup + timeoutSeconds;
+
+            while (!m_Resource.IsInitialized) {
+                linked.Token.ThrowIfCancellationRequested();
+
+                if (Time.realtimeSinceStartup >= deadline) {
+                    throw new TimeoutException(
+                        "ZFramework resources did not initialize. Check the foundation configuration before retrying startup.");
+                }
+
+                await Task.Yield();
+            }
+
+            linked.Token.ThrowIfCancellationRequested();
         }
 
         public static string PackageName(GameInfo info) =>

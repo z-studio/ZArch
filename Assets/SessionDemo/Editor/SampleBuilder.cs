@@ -58,8 +58,8 @@ namespace Demo.Editor {
                 lobby.transform.SetParent(canvas, false);
                 Set(view, "m_LobbyPanel", lobby);
                 SetArray(view, "m_GameButtons",
-                    Button(lobby.transform, "OpenGameA", "Open Game A", -210, 35, root.OpenGameA),
-                    Button(lobby.transform, "OpenGameB", "Open Game B", -210, -40, root.OpenGameB));
+                    Button(lobby.transform, "OpenGameA", "Open Game A", -210, 35, root.OpenGame, "game-a"),
+                    Button(lobby.transform, "OpenGameB", "Open Game B", -210, -40, root.OpenGame, "game-b"));
                 Set(view, "m_Return", Button(lobby.transform, "ReturnToLobby", "Return to lobby", -210, -115, root.ReturnToLobby));
                 Set(view, "m_Logout", Button(canvas, "Logout", "Logout / Cancel login", -210, -200, root.Logout));
                 Set(view, "m_Retry", Button(canvas, "RetryStartup", "Retry startup", 210, -200, root.RetryStartup));
@@ -129,7 +129,11 @@ namespace Demo.Editor {
                 throw new InvalidOperationException("Generate the demo scene and resources first.");
             ConfigureCollectors();
             var version = DateTime.UtcNow.ToString("yyyyMMddHHmmssfff");
-            foreach (var id in new[] { "app", "game-a", "game-b" }) {
+            // 新游戏只需在 YooAsset 中加入 SessionDemo 分组，不必继续修改这份生成器。
+            var packages = BundleCollectorSettingData.Setting.Packages
+                .Where(package => package.Groups.Any(group => group.GroupName == "SessionDemo"))
+                .Select(package => package.PackageName).ToArray();
+            foreach (var id in packages) {
                 var parameters = new ScriptableBuildParameters {
                     BuildOutputRoot = BundleBuilderHelper.GetDefaultBuildOutputRoot(),
                     BundledFileRoot = BundleBuilderHelper.GetStreamingAssetsRoot(),
@@ -153,7 +157,7 @@ namespace Demo.Editor {
                 File.Copy(linker, linkerFolder + "/link.xml", true);
             }
             AssetDatabase.Refresh();
-            Debug.Log("Built App and two game YooAsset resource packages into StreamingAssets for the current target.");
+            Debug.Log($"Built {packages.Length} demo resource packages into StreamingAssets for the current target.");
         }
 
         private static void ConfigureCollectors() {
@@ -256,13 +260,25 @@ namespace Demo.Editor {
 
         private static UnityEngine.UI.Button Button(Transform parent, string name, string label, float x, float y,
             UnityAction action) {
+            var button = CreateButton(parent, name, label, x, y);
+            UnityEventTools.AddPersistentListener(button.onClick, action);
+            return button;
+        }
+
+        private static UnityEngine.UI.Button CreateButton(Transform parent, string name, string label, float x, float y) {
             var go = Rect(parent, name, x, y, 290, 52).gameObject;
             var image = go.AddComponent<UnityEngine.UI.Image>();
             image.color = new Color(0.12f, 0.28f, 0.5f);
             var button = go.AddComponent<UnityEngine.UI.Button>();
             button.targetGraphic = image;
-            UnityEventTools.AddPersistentListener(button.onClick, action);
             Text(go.transform, "Label", label, 0, 0, 280);
+            return button;
+        }
+
+        private static UnityEngine.UI.Button Button(Transform parent, string name, string label, float x, float y,
+            UnityAction<string> action, string argument) {
+            var button = CreateButton(parent, name, label, x, y);
+            UnityEventTools.AddStringPersistentListener(button.onClick, action, argument);
             return button;
         }
 

@@ -930,14 +930,14 @@ MonoBehaviour:
       m_Calls:
       - m_Target: {fileID: 130422948}
         m_TargetAssemblyTypeName: Demo.App.AppEntry, Demo.App
-        m_MethodName: OpenGameB
-        m_Mode: 0
+        m_MethodName: OpenGame
+        m_Mode: 5
         m_Arguments:
           m_ObjectArgument: {fileID: 0}
           m_ObjectArgumentAssemblyTypeName:
           m_IntArgument: 0
           m_FloatArgument: 0
-          m_StringArgument:
+          m_StringArgument: game-b
           m_BoolArgument: 0
         m_CallState: 2
 --- !u!1 &478175200
@@ -1427,14 +1427,14 @@ MonoBehaviour:
       m_Calls:
       - m_Target: {fileID: 130422948}
         m_TargetAssemblyTypeName: Demo.App.AppEntry, Demo.App
-        m_MethodName: OpenGameA
-        m_Mode: 0
+        m_MethodName: OpenGame
+        m_Mode: 5
         m_Arguments:
           m_ObjectArgument: {fileID: 0}
           m_ObjectArgumentAssemblyTypeName:
           m_IntArgument: 0
           m_FloatArgument: 0
-          m_StringArgument:
+          m_StringArgument: game-a
           m_BoolArgument: 0
         m_CallState: 2
 --- !u!1 &942379287

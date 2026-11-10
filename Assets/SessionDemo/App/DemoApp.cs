@@ -22,13 +22,21 @@ namespace Demo.App {
     /// <summary>模拟账号连接；真实项目在这里使用 ZFramework 网络组件，连接状态属于账号。</summary>
     public sealed class AccountSystem : AbstractSystem {
         public bool Connected { get; private set; }
-        protected override void OnInit() { }
+
+        protected override void OnInit() {
+        }
+
         public async Task ConnectAsync(CancellationToken cancellation) {
             await Task.Delay(20, cancellation);
             cancellation.ThrowIfCancellationRequested();
             Connected = true;
         }
-        public Task DisconnectAsync() { Connected = false; return Task.CompletedTask; }
+
+        public Task DisconnectAsync() {
+            Connected = false;
+            return Task.CompletedTask;
+        }
+
         protected override void OnDeinit() => Connected = false;
     }
 
@@ -69,6 +77,7 @@ namespace Demo.App {
             // 与 QF 一样直接发送，App、大厅和当前游戏都可用普通 RegisterEvent 监听。
             this.SendEvent(new CoinsChanged(value));
         }
+
         protected override void OnInit() {
         }
 

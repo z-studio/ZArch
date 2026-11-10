@@ -6,7 +6,10 @@ using UnityEngine;
 namespace Demo.GameB {
     public sealed class GameBEntry : GameEntry {
         public string RoomId { get; private set; }
-        [SerializeField] private UnityEngine.UI.Text m_Rounds;
+
+        [SerializeField]
+        private UnityEngine.UI.Text m_Rounds;
+
         private int m_Coins;
 
         protected override async Task OnEnterAsync(CancellationToken cancellation) {
@@ -24,7 +27,9 @@ namespace Demo.GameB {
             var subscription = roundModel.rounds.RegisterAndInvoke(ShowRounds);
             subscription.UnregisterWhenSessionEnds(Session);
         }
+
         private void ShowRounds(int rounds) => m_Rounds.text = $"GameB rounds: {rounds} / Coins: {m_Coins}";
+
         private void OnCoinsChanged(Demo.App.CoinsChanged message) {
             m_Coins = message.Coins;
             ShowRounds(this.GetModel<RoundModel>().rounds.Value);

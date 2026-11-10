@@ -25,7 +25,7 @@ namespace Demo.App {
     public sealed class DemoBackend : IAppBackend {
         public async Task<ServerSettings> LoadSettingsAsync(CancellationToken cancellation) {
             await Task.Delay(30, cancellation);
-            
+
             return new ServerSettings {
                 apiAddress = "demo://server",
                 games = new[] {
@@ -37,7 +37,7 @@ namespace Demo.App {
 
         public async Task<AccountData> LoginAsync(string account, CancellationToken cancellation) {
             await Task.Delay(30, cancellation);
-            
+
             return new AccountData {
                 id = account, token = "demo-session-" + account, coins = account == "Alice" ? 100 : 200
             };

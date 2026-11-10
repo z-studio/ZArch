@@ -2,7 +2,7 @@
 
 ZFramework.Unity 提供资源池、资源更新、UI、实体、声音、场景和网络等基础能力。QFramework 提供 Model / System / Command / Query 的业务规范，Session 管理局部业务生命周期。
 
-先从项目根目录的 [示例阅读路径](../../README.md) 阅读 AppEntry、AppLogic 和游戏命令，再按需要查阅本说明。
+先从项目根目录的 [业务阅读路径与 GameC 接入教程](../../README.md) 看 AppLogic、游戏命令和 GameEntry，再按需要查阅本说明。
 
 ## 三种生命周期
 
@@ -100,6 +100,7 @@ var web = this.GetUtility<ZFrameworkServices>().Get<WebRequestComponent>();
 var packages = new ZFrameworkGamePackages(resourceComponent);
 var loader = new ZFrameworkGamePackageLoader(resourceComponent, packages: packages);
 // 可选：大厅提前下载某个游戏（不创建游戏会话）。
+await packages.WaitForReadyAsync(60, token);
 await packages.PrepareAsync(selectedGame, token);
 // packages.Progress 提供当前游戏、阶段、进度与下载字节数。
 ```
@@ -227,7 +228,7 @@ ProcedureGame
 
 保留项目自己的启动 Procedure 顺序。配置、协议、版本检查和 SDK 初始化仍按现有顺序执行；在最后一个启动 Procedure 中调用一次 `Flow.StartAsync`，其准备回调完成剩余的基础准备，成功后再进入登录。此前的启动流程可以访问 App 根架构，但不创建账号 Session。不要每个启动 Procedure 都再调用 StartAsync，也不要在准备回调中等待 ProcedureLogin，形成循环等待。
 
-登录、大厅和游戏 Procedure 可继承 `AppProcedure`，实现 Flow 属性，在 OnUpdate 调用 `FollowFlow<ProcedureLogin, ProcedureLobby, ProcedureGame>(owner)`。只有 Login/Lobby/Game 稳定状态触发显示流程切换；加载、注销和失败期间保留当前流程显示进度或重试。示例 AppProcedures.cs 实际注册了四个 Procedure，启动 Procedure 调用 AppEntry.StartApp，所有切换都跟随 Flow 结果。
+登录、大厅和游戏 Procedure 可继承 `AppProcedure`，实现 Flow 属性，在 OnUpdate 调用 `FollowFlow<ProcedureLogin, ProcedureLobby, ProcedureGame>(owner)`。只有 Login/Lobby/Game 稳定状态触发显示流程切换；加载、注销和失败期间保留当前流程显示进度或重试。示例 AppProcedures.cs 实际注册了四个 Procedure，启动 Procedure 调用 AppEntry.StartApp，所有按钮经 AppLogic 进入 Flow，切换跟随 Flow 结果。新增游戏不用新增 Procedure。
 
 项目已有界面切换时，可在各 Procedure.OnEnter 中打开对应界面。进入游戏期间保留大厅，只有 Flow.Game（游戏 OnEnterAsync 完成）后才隐藏大厅。显示逻辑不应修改 Flow.State。
 
@@ -257,3 +258,5 @@ ProcedureGame
 | AppEntry.LobbyArchitecture.GetSystem | 当前游戏 this.GetSystem，向账号会话查找 |
 
 HTTP/Socket 组件可常驻，账号 Token 与大厅连接放账号服务；游戏 Token 与房间连接放游戏服务。包装旧回调接口时，取消不仅要结束等待，还要阻止迟到回包更新模型。两个真实项目的接口、UI 与游戏逻辑仍需按该映射迁移，本仓库示例没有冒充生产服务器。
+
+新增一个独立游戏的完整最小步骤见根目录 GameC 教程。内置 A/B 按钮统一绑定 AppEntry.OpenGame(string)，包准备器负责资源组件等待，不需要复制 App 资源辅助类或增加游戏专用按钮方法。
