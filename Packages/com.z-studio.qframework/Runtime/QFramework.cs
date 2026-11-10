@@ -371,12 +371,24 @@ namespace QFramework {
     public interface ICanRegisterEvent : IBelongToArchitecture {
     }
 
+    /// <summary>由有自身显示周期的 Controller 接管订阅的生命周期；不改变事件来源和传播范围。</summary>
+    public interface IEventRegistrationOwner : ICanRegisterEvent {
+        IUnregister RegisterEvent<T>(Action<T> handler);
+        void UnregisterEvent<T>(Action<T> handler);
+    }
+
     public static class CanRegisterEventExtension {
         public static IUnregister RegisterEvent<T>(this ICanRegisterEvent self, Action<T> onEvent) =>
-            self.GetArchitecture().RegisterEvent<T>(onEvent);
+            self is IEventRegistrationOwner owner
+                ? owner.RegisterEvent(onEvent) : self.GetArchitecture().RegisterEvent(onEvent);
 
-        public static void UnregisterEvent<T>(this ICanRegisterEvent self, Action<T> onEvent) =>
-            self.GetArchitecture().UnregisterEvent<T>(onEvent);
+        public static void UnregisterEvent<T>(this ICanRegisterEvent self, Action<T> onEvent) {
+            if (self is IEventRegistrationOwner owner) {
+                owner.UnregisterEvent(onEvent);
+            } else {
+                self.GetArchitecture().UnregisterEvent(onEvent);
+            }
+        }
     }
 
     public interface ICanSendCommand : IBelongToArchitecture {

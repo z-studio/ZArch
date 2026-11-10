@@ -32,6 +32,16 @@ Session 就是管理这一段使用期间的容器。游戏获取钱包时，自
 
 Procedure 继续编排项目步骤和界面：示例为 Launch → Login → Lobby → Game。它跟随 AppLogic 的操作结果切换，不在 OnLeave 重复卸载游戏或销毁账号。
 
+事件注册都使用 `this.RegisterEvent<T>(handler)`，框架按使用者自动清理：
+
+| 使用位置 | 在哪里注册 | 自动解除时机 |
+| --- | --- | --- |
+| 普通游戏组件 / Model / System | 游戏或服务初始化时 | 所属会话结束 |
+| SessionUIForm 窗口 | OnOpen，先调用 base | 窗口关闭、销毁或会话结束 |
+| AppProcedure 流程 | OnEnter，先调用 base | 离开流程、销毁或所属会话结束 |
+
+窗口复用、流程再次进入时会重新执行 OnOpen / OnEnter，不在只执行一次的 OnInit 中注册业务事件。界面中的属性订阅使用 `Track(wallet.coins.RegisterAndInvoke(ShowCoins))`，同样自动清理。
+
 ## 修改现有业务
 
 | 想做什么 | 修改位置 |

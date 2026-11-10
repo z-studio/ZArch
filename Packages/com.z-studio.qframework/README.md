@@ -232,17 +232,39 @@ ProcedureGame
 
 项目已有界面切换时，可在各 Procedure.OnEnter 中打开对应界面。进入游戏期间保留大厅，只有 Flow.Game（游戏 OnEnterAsync 完成）后才隐藏大厅。显示逻辑不应修改 Flow.State。
 
-**OnLeave 不再执行游戏退出、场景卸载或账号 Dispose**，这些工作由 Flow 统一等待。切到另一个 Procedure 不代表要注销。AppProcedure.VisibleToken 仅取消这个显示流程的界面任务，不代表账号或游戏的生命周期；Procedure 自己注册的界面事件仍需在 OnLeave 解除，不能只等待账号注销。Observe 用于观察无法返回 Task 的框架回调，交互按钮可像示例 Run 一样显示异常和重试入口。
+**OnLeave 不再执行游戏退出、场景卸载或账号 Dispose**，这些工作由 Flow 统一等待。切到另一个 Procedure 不代表要注销。AppProcedure.VisibleToken 仅取消这个显示流程的界面任务，不代表账号或游戏的生命周期；Procedure 在 OnEnter 中通过普通 RegisterEvent 注册的事件，会在 OnLeave / OnDestroy 自动解除。Observe 用于观察无法返回 Task 的框架回调，交互按钮可像示例 Run 一样显示异常和重试入口。
 
 ## ZFramework UI 与子组件
 
 游戏/账号界面继承 `SessionUIForm`，用 ZFramework 原有 OpenUIFormAsync 打开，userData 传入 `new SessionUIContext(session, viewData)`。资源包参数继续使用项目的包名；不要再通过静态 GameGlobal.Interface 查架构。
 
 - OnOpen 中通过 GetModel/GetSystem 访问当前会话，ViewData 是业务打开参数。
-- `Listen<T>(handler)` 监听共享默认事件并跟踪界面的订阅；`Listen(subscription)` 跟踪 BindableProperty 等订阅。关闭界面和会话结束都会解除登记的订阅。
+- 普通 `this.RegisterEvent<T>(handler)` 跟随窗口的打开周期，OnClose / OnDestroy 自动解除；不需要 Listen 或手写解除代码。
+- 属性或外部订阅用 `Track(subscription)` 登记，例如 `Track(wallet.coins.RegisterAndInvoke(ShowCoins))`，窗口关闭或会话结束都会解除。
+- AppProcedure 同样在 OnEnter 中使用普通 RegisterEvent，OnLeave / OnDestroy 自动解除；再次进入时重新注册。
+- 通过 IController / ICanRegisterEvent 调用也遵守相同生命周期；窗口绑定的 SessionBehaviour 子组件注册的事件同样随窗口关闭解除。
+- OnInit 只做一次性的控件、引用等初始化；业务事件放 OnOpen / OnEnter，并先调用 base。放错阶段会得到明确提示，不会留下只在第一次打开生效的订阅。
 - UI 池复用时重新绑定会话，关闭时清空；子组件继承 SessionBehaviour 并随界面绑定。
 - 实例化在游戏根对象之外的业务组件，需要由创建方调用 BindSession；组件不拥有会话，不应自行 Dispose。
 - 公共包中的账号界面必须在 closeAccount 中先关闭，再释放账号；游戏独占包的界面由游戏退出路径统一回收。框架不会全局关闭其他业务的窗口。
+
+### UI 和 Procedure 的事件写法
+
+```csharp
+// SessionUIForm：每次打开都执行，关闭时自动解除。
+protected override void OnOpen(object userData) {
+    base.OnOpen(userData);
+    this.RegisterEvent<CoinsChanged>(OnCoinsChanged);
+}
+
+// AppProcedure：每次进入都执行，离开时自动解除。
+protected override void OnEnter(ProcedureOwner owner) {
+    base.OnEnter(owner);
+    this.RegisterEvent<CoinsChanged>(OnCoinsChanged);
+}
+```
+
+`UnregisterEvent(handler)` 与返回的 IUnregister 仍可提前解除，只影响当前窗口或 Procedure 自己的注册。同一处理方法在账号、其他窗口或 App 中注册，不会被误删。生命周期方法的重写应调用对应 base；不要绕过 Controller，直接对 GetArchitecture().RegisterEvent 注册界面通知，那样订阅属于会话而不是界面。
 
 ## 两个业务项目的迁移位置
 
@@ -251,6 +273,7 @@ ProcedureGame
 | DropBall 的 AppEntry.ConfigureSession | 登录注册回调，注册账号 Model/System |
 | DropBall 的 RecreateSessionScope / Super-Ace 的账号重置 | Flow.LogoutAsync，再次登录创建新账号会话 |
 | DropBall 的 GameSessionCoordinator / ProcedureGame 加载与清理 | Flow.OpenGameAsync / ReturnToLobbyAsync，删除重复清理路径 |
+| Procedure.OnInit / UI.OnInit 中的业务事件订阅 | 移到 OnEnter / OnOpen，使用普通 RegisterEvent，删除对应手工解除代码 |
 | GameResourcePreparation / InternalGameItem 中的下载逻辑 | ZFrameworkGamePackages，列表项只触发准备并显示进度 |
 | DropBallGameModule / SuperAceGlobal.Init | GameDefinition.Configure，只注册游戏服务 |
 | InitService / SuperAceGlobal.Startup | GameEntry.OnEnterAsync，等待房间与配置就绪 |
