@@ -1,0 +1,11 @@
+{
+  "name": "Demo.GameB",
+  "rootNamespace": "Demo.GameB",
+  "references": [
+    "QFramework",
+    "Demo.App",
+    "Unity.ugui"
+  ],
+  "includePlatforms": [],
+  "noEngineReferences": false
+}

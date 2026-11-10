@@ -1,0 +1,19 @@
+{
+  "name": "com.z-studio.qframework",
+  "version": "1.0.0",
+  "displayName": "QFramework",
+  "description": "",
+  "unity": "6000.0",
+  "keywords": [
+    "architecture",
+    "module",
+    "framework"
+  ],
+  "author": {
+    "name": "Z Studio"
+  },
+  "dependencies": {
+    "com.tuyoogame.yooasset": "3.0.7",
+    "com.unity.ugui": "2.0.0"
+  }
+}
