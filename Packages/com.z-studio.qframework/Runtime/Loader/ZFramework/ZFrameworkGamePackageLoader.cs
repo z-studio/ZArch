@@ -5,7 +5,10 @@ using ZFramework.Unity;
 using UnityEngine.SceneManagement;
 
 namespace QFramework {
-    /// <summary>复用 ZFramework 资源池，并在子会话释放前清理游戏表现。</summary>
+    /// <summary>
+    /// ZFramework 接入层：准备选中的资源包，借用入口配置，把本次资源访问注册到游戏会话。
+    /// 不创建第二套缓存。业务/表现退出后归还资源引用，App 持有的包准备器另行管理包本身。
+    /// </summary>
     public sealed class ZFrameworkGamePackageLoader : IGamePackageLoader {
         private readonly ResourceComponent m_Resource;
         private readonly ZFrameworkGamePackages m_Packages;
@@ -90,6 +93,7 @@ namespace QFramework {
             }
         }
 
+        // 只负责入口资产的借用/归还；Prefab/场景的运行规则交给 UnityGamePackageLoader。
         private sealed class DefinitionLoader : IGameDefinitionLoader {
             private readonly ResourceComponent m_Resource;
             private readonly string m_PackageName;
@@ -125,6 +129,7 @@ namespace QFramework {
             }
         }
 
+        // 在通用 Package 外补上 ZFramework 资源记录；会话释放后才归还这些借用。
         private sealed class GamePackage : IGamePackage {
             private readonly IGamePackage m_Inner;
             private readonly ZFrameworkGameResources m_Resources;
@@ -153,6 +158,7 @@ namespace QFramework {
             }
         }
 
+        // 在通用 RuntimeGame 外补上表现清理：UI/实体/声音停止使用之后，资源才能安全归还。
         private sealed class Game : IGame {
             private readonly IGame m_Inner;
             private readonly ZFrameworkGameResources m_Resources;

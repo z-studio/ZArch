@@ -11,7 +11,10 @@ namespace QFramework {
     public sealed class ZFrameworkGameResources : IGameResources {
         private readonly ResourceComponent m_Resource;
         private readonly string m_PackageName;
+
         private readonly CancellationTokenSource m_Lifetime = new();
+
+        // 记录的是借用次数，不是唯一对象集合；相同资源加载两次也要分别归还。
         private readonly List<Object> m_Assets = new();
         private readonly List<GameObject> m_Instances = new();
         private int m_Loading;
@@ -128,6 +131,7 @@ namespace QFramework {
         internal async Task DrainAsync() {
             BeginClose();
 
+            // 先让在途请求完成/回滚，再销毁实例；否则迟到结果可能在清理后重新留下对象。
             while (m_Loading > 0) {
                 await Task.Yield();
             }
@@ -138,6 +142,7 @@ namespace QFramework {
                 }
             }
 
+            // 等待 Unity 的延迟销毁与自动资源归还，不能只调用 Destroy 就马上卸载底层引用。
             while (m_Instances.Exists(instance => instance)) {
                 await Task.Yield();
             }

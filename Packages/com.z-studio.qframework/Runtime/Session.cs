@@ -3,10 +3,17 @@ using System.Collections.Generic;
 using System.Threading;
 
 namespace QFramework {
-    /// <summary>管理一段使用期间的数据、服务与订阅；服务向父级查找，事件共用根架构。</summary>
+    /// <summary>
+    /// 管理一段使用期间的数据、服务与订阅：注册新对象 → Initialize → 使用 → Dispose。
+    /// 服务本地优先、再查父级；事件始终共用根架构。只释放自己和子会话，不释放父级。
+    /// </summary>
     public sealed class Session : IArchitecture, IDisposable {
         private readonly Dictionary<Type, object> m_Instances = new();
+
+        // 所有注册对象都记录下来；认证中途失败时，尚未 Init 的凭证也需要 IDisposable 收尾。
         private readonly List<object> m_RegistrationOrder = new();
+
+        // 实际尝试过 Init 的对象单独记账，以相反顺序调用 Deinit。
         private readonly List<ICanInit> m_InitOrder = new();
         private readonly List<Subscription> m_Subscriptions = new();
         private readonly List<Session> m_Children = new();
@@ -16,8 +23,13 @@ namespace QFramework {
         private bool m_Disposing;
 
         public string Name { get; }
+
+        /// <summary>借用的父级，用于查找公共服务。Dispose 当前会话不会销毁它。</summary>
         public IArchitecture Parent { get; }
+
+        /// <summary>沿父级找到 App 根架构，所有普通事件在这里发送和注册。</summary>
         public IArchitecture App => Parent is Session session ? session.App : Parent;
+
         public bool IsDisposed { get; private set; }
         public CancellationToken LifetimeToken { get; }
 
@@ -33,6 +45,7 @@ namespace QFramework {
             }
         }
 
+        // 1. 先注册本地对象，再统一初始化。不要重复注册从父级取得的实例。
         public T RegisterModel<T>(T model) where T : IModel => Register(model);
         public T RegisterSystem<T>(T system) where T : ISystem => Register(system);
         public T RegisterUtility<T>(T utility) where T : IUtility => Register(utility);
@@ -86,6 +99,7 @@ namespace QFramework {
             m_Initializing = true;
 
             try {
+                // 先让所有 Model 就绪，再初始化 System，保持 QF 的依赖顺序。
                 foreach (var instance in m_RegistrationOrder) {
                     if (instance is IModel model) {
                         Init(model);
@@ -119,6 +133,7 @@ namespace QFramework {
             instance.Initialized = true;
         }
 
+        // 2. 本地没有才查父级；返回的父级 System 保留其原来的架构，不重新绑定到当前会话。
         public T GetModel<T>() where T : class, IModel => Get<T>() ?? Parent.GetModel<T>();
         public T GetSystem<T>() where T : class, ISystem => Get<T>() ?? Parent.GetSystem<T>();
         public T GetUtility<T>() where T : class, IUtility => Get<T>() ?? Parent.GetUtility<T>();
@@ -146,6 +161,7 @@ namespace QFramework {
             return query.Do();
         }
 
+        // 3. 事件来源是根架构，订阅的有效期由当前会话管理。
         // 默认事件直接使用根架构的事件系统，与 QF 的普通 SendEvent/RegisterEvent 一致。
         public void SendEvent<T>() where T : new() => SendEvent(new T());
 
@@ -162,6 +178,7 @@ namespace QFramework {
             }
 
             // 为每次注册建立独立委托，解除游戏订阅不会误删根架构或其他会话中的同名处理方法。
+            // 事件派发可能已经捕获委托；若前一个处理方法释放了本会话，旧回调不能再执行。
             void Receive(T message) {
                 if (!IsDisposed && !m_Disposing) {
                     handler(message);
@@ -205,6 +222,7 @@ namespace QFramework {
             return tracked;
         }
 
+        /// <summary>只发出停止请求，不立即销毁数据。异步操作的真正结束由 AppFlow/GameLauncher 等待。</summary>
         public void CancelLifetime() {
             if (!IsDisposed && !m_Lifetime.IsCancellationRequested) {
                 m_Lifetime.Cancel();
@@ -213,6 +231,7 @@ namespace QFramework {
 
         public void Deinit() => Dispose();
 
+        // 4. 同步释放业务对象。先由外层流程等待游戏/连接退出，再进入这里。
         public void Dispose() {
             if (IsDisposed || m_Disposing) {
                 return;
@@ -221,6 +240,7 @@ namespace QFramework {
             m_Disposing = true;
             var errors = new List<Exception>();
 
+            // 一个对象释放失败也继续尝试其他对象，最后统一报告，避免后续订阅和凭证被遗留。
             void Attempt(Action action) {
                 try {
                     action();
@@ -229,22 +249,27 @@ namespace QFramework {
                 }
             }
 
+            // 先阻止新回调，并通知在途任务停止。
             Attempt(CancelLifetime);
 
+            // 子会话可能使用本层服务，先释放子级。复制列表是因为 child.Dispose 会从父级移除自己。
             foreach (var child in m_Children.ToArray()) {
                 Attempt(child.Dispose);
             }
 
+            // 后初始化的 System 先释放；Model 留到依赖它的 System 完成清理之后。
             for (var i = m_InitOrder.Count - 1; i >= 0; i--) {
                 var instance = m_InitOrder[i];
                 Attempt(instance.Deinit);
                 instance.Initialized = false;
             }
 
+            // 解除根事件系统和属性上的本会话订阅；不会清空 App 或其他会话的监听器。
             foreach (var subscription in new List<Subscription>(m_Subscriptions)) {
                 Attempt(subscription.Unregister);
             }
 
+            // IDisposable 也覆盖未初始化对象。实现应可重复释放，以兼容 OnDeinit 自身的收尾。
             for (var i = m_RegistrationOrder.Count - 1; i >= 0; i--) {
                 if (m_RegistrationOrder[i] is IDisposable disposable) {
                     Attempt(disposable.Dispose);

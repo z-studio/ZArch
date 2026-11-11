@@ -6,6 +6,7 @@ namespace QFramework {
     internal sealed class ControllerSubscriptions {
         private readonly List<Subscription> m_Subscriptions = new();
         private readonly string m_EnterMethod;
+        // 非空表示窗口/Procedure 当前可见；每条 Subscription 另有自己的活动标记，避免旧派发跨过重开周期。
         private Func<IArchitecture> m_Architecture;
 
         public ControllerSubscriptions(string enterMethod) => m_EnterMethod = enterMethod;

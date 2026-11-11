@@ -1,7 +1,10 @@
 using UnityEngine;
 
 namespace QFramework {
-    /// <summary>游戏包中的入口资源。只保存配置，每次进入都会创建新的会话与游戏对象。</summary>
+    /// <summary>
+    /// 游戏包里的配置资产：指定 Prefab/场景，以及要注册的本游戏 Model/System。
+    /// 加载器借用此资产，每次进入另外创建 Session 与游戏对象；不在资产里保存账号或回合数据。
+    /// </summary>
     public abstract class GameDefinition : ScriptableObject {
         [SerializeField]
         private GameEntry m_Prefab;
@@ -11,6 +14,8 @@ namespace QFramework {
 
         public GameEntry Prefab => m_Prefab;
         public string SceneAddress => m_SceneAddress;
+
+        /// <summary>只注册新建的游戏本地对象；GameLauncher 会在注册全部完成后调用 Session.Initialize。</summary>
         public abstract void Configure(Session session);
     }
 }

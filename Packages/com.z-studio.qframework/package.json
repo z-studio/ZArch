@@ -20,5 +20,12 @@
     "com.cysharp.unitask": "2.5.11",
     "com.z-studio.uniutils": "1.0.0",
     "com.z-studio.unikit.shell": "1.0.0"
-  }
+  },
+  "samples": [
+    {
+      "displayName": "Demo",
+      "description": "登录、大厅、两个独立游戏、Procedure、YooAsset 资源与会话生命周期示例。导入后打开 App/App.unity 即可运行。",
+      "path": "Samples~/Demo"
+    }
+  ]
 }

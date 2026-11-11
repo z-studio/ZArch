@@ -128,6 +128,7 @@ namespace QFramework {
 
         private readonly IOCContainer m_Container = new();
 
+        // 注册类型就是查询的键：注册接口时应显式写 RegisterSystem<IMySystem>，之后按同一接口获取。
         public TSystem RegisterSystem<TSystem>(TSystem system) where TSystem : ISystem {
             system.SetArchitecture(this);
             m_Container.Register<TSystem>(system);
@@ -185,6 +186,7 @@ namespace QFramework {
             return query.Do();
         }
 
+        // 架构持有一个普通事件系统；Session 也把普通事件交到它，而不是各建一个隔离通道。
         private readonly TypeEventSystem m_TypeEventSystem = new();
 
         public void SendEvent<TEvent>() where TEvent : new() => m_TypeEventSystem.Send<TEvent>();
@@ -577,6 +579,7 @@ namespace QFramework {
     public class IOCContainer {
         private readonly Dictionary<Type, object> m_Instances = new();
 
+        // 容器按 typeof(T) 精确匹配，不会遍历实例并猜测它实现了哪些接口。
         public void Register<T>(T instance) {
             var key = typeof(T);
             m_Instances[key] = instance;

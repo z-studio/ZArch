@@ -16,52 +16,8 @@ MonoBehaviour:
   ShowEditorAlias: 0
   UniqueBundleName: 0
   Packages:
-  - PackageName: game-a
-    PackageDesc: 
-    EnableAddressable: 1
-    SupportExtensionless: 1
-    LocationToLower: 0
-    IncludeAssetGUID: 0
-    AutoCollectShaders: 1
-    IgnoreRuleName: NormalIgnoreRule
-    Groups:
-    - GroupName: SessionDemo
-      GroupDesc: 
-      AssetTags: 
-      ActiveRuleName: EnableGroup
-      Collectors:
-      - CollectPath: Assets/SessionDemo/GameA
-        CollectorGUID: 7005156a8ea244016acd8abe6ec635c7
-        CollectorType: 0
-        AddressRuleName: AddressByFileName
-        PackRuleName: PackDirectory
-        FilterRuleName: CollectAll
-        AssetTags: 
-        UserData: 
-  - PackageName: game-b
-    PackageDesc: 
-    EnableAddressable: 1
-    SupportExtensionless: 1
-    LocationToLower: 0
-    IncludeAssetGUID: 0
-    AutoCollectShaders: 1
-    IgnoreRuleName: NormalIgnoreRule
-    Groups:
-    - GroupName: SessionDemo
-      GroupDesc: 
-      AssetTags: 
-      ActiveRuleName: EnableGroup
-      Collectors:
-      - CollectPath: Assets/SessionDemo/GameB
-        CollectorGUID: 39457c4f124334a19b74ef9d4e9ce1c0
-        CollectorType: 0
-        AddressRuleName: AddressByFileName
-        PackRuleName: PackSeparately
-        FilterRuleName: CollectAll
-        AssetTags: 
-        UserData: 
   - PackageName: app
-    PackageDesc: 
+    PackageDesc:
     EnableAddressable: 1
     SupportExtensionless: 1
     LocationToLower: 0
@@ -69,16 +25,60 @@ MonoBehaviour:
     AutoCollectShaders: 1
     IgnoreRuleName: NormalIgnoreRule
     Groups:
-    - GroupName: SessionDemo
-      GroupDesc: 
-      AssetTags: 
+    - GroupName: Demo
+      GroupDesc:
+      AssetTags:
       ActiveRuleName: EnableGroup
       Collectors:
-      - CollectPath: Assets/SessionDemo/App/Content
+      - CollectPath: Assets/Samples/QFramework/1.0.0/Demo/App/Content
         CollectorGUID: dd361145fcce04fdd82fdab23d599a9e
         CollectorType: 0
         AddressRuleName: AddressByFileName
         PackRuleName: PackDirectory
         FilterRuleName: CollectAll
-        AssetTags: 
-        UserData: 
+        AssetTags:
+        UserData:
+  - PackageName: game-a
+    PackageDesc:
+    EnableAddressable: 1
+    SupportExtensionless: 1
+    LocationToLower: 0
+    IncludeAssetGUID: 0
+    AutoCollectShaders: 1
+    IgnoreRuleName: NormalIgnoreRule
+    Groups:
+    - GroupName: Demo
+      GroupDesc:
+      AssetTags:
+      ActiveRuleName: EnableGroup
+      Collectors:
+      - CollectPath: Assets/Samples/QFramework/1.0.0/Demo/GameA
+        CollectorGUID: 7005156a8ea244016acd8abe6ec635c7
+        CollectorType: 0
+        AddressRuleName: AddressByFileName
+        PackRuleName: PackDirectory
+        FilterRuleName: CollectAll
+        AssetTags:
+        UserData:
+  - PackageName: game-b
+    PackageDesc:
+    EnableAddressable: 1
+    SupportExtensionless: 1
+    LocationToLower: 0
+    IncludeAssetGUID: 0
+    AutoCollectShaders: 1
+    IgnoreRuleName: NormalIgnoreRule
+    Groups:
+    - GroupName: Demo
+      GroupDesc:
+      AssetTags:
+      ActiveRuleName: EnableGroup
+      Collectors:
+      - CollectPath: Assets/Samples/QFramework/1.0.0/Demo/GameB
+        CollectorGUID: 39457c4f124334a19b74ef9d4e9ce1c0
+        CollectorType: 0
+        AddressRuleName: AddressByFileName
+        PackRuleName: PackSeparately
+        FilterRuleName: CollectAll
+        AssetTags:
+        UserData:

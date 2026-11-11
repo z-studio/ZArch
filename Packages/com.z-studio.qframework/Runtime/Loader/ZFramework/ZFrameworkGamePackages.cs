@@ -26,7 +26,10 @@ namespace QFramework {
     /// <summary>App 持有的按需资源包准备器。游戏退出归还引用，App 关闭才销毁自己创建的包；磁盘缓存保留。</summary>
     public sealed class ZFrameworkGamePackages {
         private readonly ResourceComponent m_Resource;
+
         private readonly Func<GameInfo, EPlayMode> m_PlayMode;
+
+        // 借用外部已就绪包时不加入 m_Owned；Shutdown 只能销毁本准备器创建的包。
         private readonly List<string> m_Owned = new();
         private readonly HashSet<string> m_Ready = new();
         private readonly SemaphoreSlim m_Gate = new(1, 1);
@@ -117,6 +120,7 @@ namespace QFramework {
                 created = true;
                 var mode = m_PlayMode(info);
                 Report(info, "Initializing", 0);
+                // 初始化、版本、清单和下载分别等待并检查结果；初始化成功不等于游戏资源已就绪。
                 var initialize = await m_Resource.InitPackage(name, mode, false);
                 Ensure(initialize.Status, initialize.Error, name);
                 linked.Token.ThrowIfCancellationRequested();

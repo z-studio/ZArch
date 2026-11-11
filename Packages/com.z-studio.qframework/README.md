@@ -1,10 +1,49 @@
-# ZFramework 基础 + QFramework 业务
+# QFramework：ZFramework 基础与业务架构
 
-ZFramework.Unity 提供资源池、资源更新、UI、实体、声音、场景和网络等基础能力。QFramework 提供 Model / System / Command / Query 的业务规范，Session 管理局部业务生命周期。
+这个项目演示：**启动 → 登录 → 大厅 → 游戏 → 注销 → 换账号登录**。
 
-先从项目根目录的 [业务阅读路径与 GameC 接入教程](../../README.md) 看 AppLogic、游戏命令和 GameEntry，再按需要查阅本说明。
+ZFramework.Unity 提供资源、UI、场景和网络等基础能力；QFramework 提供业务规范，Session 管理账号和游戏的使用期间。
 
-## 三种生命周期
+## 导入并运行示例
+
+1. 打开 **Window → Package Manager**，选择 **QFramework**。
+2. 在 **Samples** 中导入 **SessionDemo**。通常导入到 `Assets/Samples/QFramework/<版本>/SessionDemo`。
+3. 打开导入目录下的 **App/App.unity**，按 Play。场景、Prefab、游戏入口与 YooAsset 收集配置均已准备好。
+4. Alice 登录 → 打开 A → 玩一局 → 打开 B → 返回大厅 → 注销 → Bob 登录。
+
+示例自带的 `Editor/BundleCollectorSetting.asset` 已配置 app、game-a、game-b 三个包。若移动示例目录，先打开 **YooAsset → Bundle Collector**，点击 **Fix** 修复收集路径，再点击 **Save** 保存；YooAsset 会根据资源 GUID 找到新目录。如果项目已有收集配置，将这三个包合并进项目现有配置，保持项目中只有一份收集配置。
+
+随包示例源文件位于 [Samples~/SessionDemo](Samples~/SessionDemo)，不直接参与项目编译。导入后运行自己的副本，不直接打开包内 Samples~ 场景。
+
+你会看到：换游戏时金币保留、游戏回合重新开始；换账号时账号数据重新建立。示例使用模拟服务器，不会发起真实登录或下注。Alice 初始金币 100，Bob 为 200；游戏 A 每局加 10，游戏 B 每局加 20。
+
+## 第一次只读这三个位置
+
+| 顺序 | 看哪里 | 先看什么 |
+| --- | --- | --- |
+| 1 | [AppLogic.cs](Samples~/SessionDemo/App/AppLogic.cs) | 文件上半部分的 Start、Login、OpenGame、ReturnToLobby、Logout 五个入口 |
+| 2 | [PlayRoundCommand.cs](Samples~/SessionDemo/GameA/PlayRoundCommand.cs) | 一局怎样改变游戏回合和账号金币 |
+| 3 | [GameAEntry.cs](Samples~/SessionDemo/GameA/GameAEntry.cs) | 游戏进入时怎样绑定显示、监听金币和加载内容 |
+
+按钮都走同一条路径：**Inspector → AppEntry → AppLogic → 框架**。所有游戏按钮共用 `AppEntry.OpenGame(string)`，Inspector 参数填 `game-a` 或 `game-b`，无需为每个游戏再加按钮方法。
+
+第一次可以跳过 AppEntry 中的异常显示与关闭兜底、AppView 的显示细节、AppProcedures 的流程转接，以及包内加载器实现。它们不是新增游戏时需要复制的代码。
+
+## 想理解框架实现时
+
+按 **QFramework 注册/事件 → Session → GameLauncher → AppFlow → Unity/ZFramework 适配器** 阅读。先看正常进入与退出，再看取消、回滚和重试。
+
+[源码阅读路线](#按调用顺序读源码) 逐项解释相近类型、对象由谁持有、一次登录/进入游戏的调用链、状态变化以及退出顺序。核心方法也按该顺序组织，并在关键等待与清理处说明原因。
+
+## 只记住三种使用期间
+
+| 数据属于谁 | 例子 | 什么时候清理 |
+| --- | --- | --- |
+| App | 服务器配置、基础组件 | App 关闭 |
+| 当前账号 | 身份、钱包、大厅连接 | 注销 |
+| 当前游戏 | 回合、游戏服务、资源引用 | 退出游戏 |
+
+Session 就是管理这一段使用期间的容器。游戏获取钱包时，自动找到当前账号的钱包。业务无需手动创建、初始化或销毁 Session。
 
 ```text
 App 主架构（启动至 App 关闭）
@@ -17,6 +56,138 @@ App 主架构（启动至 App 关闭）
 
 App 常驻不代表登录状态常驻。钱包、Token 等不得注册到 App 根架构；每次登录重新向账号 Session 注册新对象。游戏从账号会话查找服务，账号会话再从 App 查找，因此游戏访问的是当前账号的钱包和同一份基础服务。
 
+普通 `SendEvent / RegisterEvent` 与 QF 一样在整个 App 架构范围内通信。账号发送金币变化，游戏直接监听；游戏退出自动解除游戏订阅，注销解除账号及游戏订阅，App 订阅保留。
+
+Procedure 继续编排项目步骤和界面：示例为 Launch → Login → Lobby → Game。它跟随 AppLogic 的操作结果切换，不在 OnLeave 重复卸载游戏或销毁账号。
+
+事件注册都使用 `this.RegisterEvent<T>(handler)`，框架按使用者自动清理：
+
+| 使用位置 | 在哪里注册 | 自动解除时机 |
+| --- | --- | --- |
+| 普通游戏组件 / Model / System | 游戏或服务初始化时 | 所属会话结束 |
+| SessionUIForm 窗口 | OnOpen，先调用 base | 窗口关闭、销毁或会话结束 |
+| AppProcedure 流程 | OnEnter，先调用 base | 离开流程、销毁或所属会话结束 |
+
+窗口复用、流程再次进入时会重新执行 OnOpen / OnEnter，不在只执行一次的 OnInit 中注册业务事件。界面中的属性订阅使用 `Track(wallet.coins.RegisterAndInvoke(ShowCoins))`，同样自动清理。
+
+## 修改现有业务
+
+| 想做什么 | 修改位置 |
+| --- | --- |
+| 每局奖励 | GameA/PlayRoundCommand.cs |
+| 接配置与登录服务器 | App/AppBackend.cs，实现 IAppBackend |
+| 账号和钱包结构 | App/DemoApp.cs |
+| 登录后注册服务、等待账号数据 | AppLogic.ConfigureAccountAsync、PrepareAccountAsync |
+| 展示界面或调整按钮状态 | App/AppView.cs |
+| 项目自己的启动 Procedure 步骤 | App/AppProcedures.cs |
+
+资源初始化等待、按需下载、取消、回收由已有适配器处理。真实列表项有房间、渠道等参数时，调用 `AppEntry.OpenGameAsync(id, new GameLaunchData(roomId))`；普通 Inspector 按钮只需填写游戏 ID。
+
+## 照着接入一个 GameC
+
+下面从最少的业务开始：点击一次按钮，游戏分数加 1。它不需要复制 A/B 的资源演示、金币事件或任何生命周期清理代码。
+
+### 1. 建独立程序集与三个脚本
+
+在导入后的 `SessionDemo` 目录中新建 `GameC`，在 Unity 中创建 Assembly Definition，命名为 `Demo.GameC`，引用 `QFramework`、`Demo.App`、`Unity.ugui`。App 的程序集不增加对它的引用。
+
+`GameCDefinition.cs`：只注册本游戏的数据。
+
+```csharp
+using QFramework;
+using UnityEngine;
+
+namespace Demo.GameC {
+    [CreateAssetMenu(menuName = "Session Demo/GameC")]
+    public sealed class GameCDefinition : GameDefinition {
+        public override void Configure(Session session) {
+            session.RegisterModel(new GameModel());
+        }
+    }
+}
+```
+
+`GameCLogic.cs`：保存数据并通过 Command 修改。
+
+```csharp
+using QFramework;
+
+namespace Demo.GameC {
+    public sealed class GameModel : AbstractModel {
+        public readonly BindableProperty<int> score = new(0);
+        protected override void OnInit() { }
+    }
+    public sealed class AddScoreCommand : AbstractCommand {
+        protected override void OnExecute() {
+            this.GetModel<GameModel>().score.Value++;
+        }
+    }
+}
+```
+
+`GameCEntry.cs`：只绑定显示和按钮。
+
+```csharp
+using System.Threading;
+using System.Threading.Tasks;
+using QFramework;
+using UnityEngine;
+
+namespace Demo.GameC {
+    public sealed class GameCEntry : GameEntry {
+        [SerializeField] private UnityEngine.UI.Text m_Score;
+
+        protected override Task OnEnterAsync(CancellationToken cancellation) {
+            this.GetModel<GameModel>().score
+                .RegisterAndInvoke(ShowScore)
+                .UnregisterWhenSessionEnds(Session);
+            return Task.CompletedTask;
+        }
+        private void ShowScore(int value) => m_Score.text = $"Score: {value}";
+        public void PlayRound() => this.SendCommand(new AddScoreCommand());
+    }
+}
+```
+
+### 2. 配置入口与资源包
+
+- 创建 GameC 根对象，挂 GameCEntry，在其下放 Canvas、Text 和 Button。Text 拖给 m_Score，按钮 OnClick 绑定 GameCEntry.PlayRound。
+- 将根对象设为未激活，再保存为 `GameC/Game.prefab`。加载器会先绑定会话、完成 OnEnterAsync，再激活它。
+- 用 **Create → Session Demo → GameC** 创建 GameCDefinition，保存为 `GameC/Entry.asset`，Prefab 填 Game.prefab，SceneAddress 留空。
+- 在 YooAsset 资源收集配置中新建包 `game-c`、分组 `SessionDemo`，收集 GameC 目录；地址规则用 `AddressByFileName`，打包规则用 `PackDirectory`。
+
+GameB 已演示场景入口：Prefab 留空、SceneAddress 填场景地址。场景与普通资源需要分别打包，业务入口写法相同。
+
+### 3. 加入目录，绑定一个按钮
+
+示例的游戏目录来自 DemoBackend，在 AppBackend.cs 返回的 games 数组中增加一行：
+
+```csharp
+new GameInfo { id = "game-c", packageName = "game-c", entryAddress = "Entry" }
+```
+
+真实项目由服务器配置返回该行，不需要为每个游戏增加 App 业务分支。
+
+在大厅添加或复制一个游戏按钮，OnClick 绑定 **AppEntry.OpenGame(string)**，字符串填 `game-c`。将按钮加入 AppView 的 GameButtons 数组，使加载、注销时能统一禁用。
+
+**新增游戏到这里就完成了。** 无需修改 AppLogic、Procedure、AppFlow，也无需编写 Session 创建、取消、卸载和订阅清理。
+
+编辑器资源模拟模式可直接运行。构建 Player 前，使用 ZFramework 的资源构建工具或 YooAsset 的 Bundle Builder，为当前目标平台构建 app、game-a、game-b；新增 GameC 后也要构建 game-c，并将资源复制到 StreamingAssets。
+
+要单独构建示例 Player 时，将导入的 App 场景加入 Build Profiles 的场景列表，并设为首个启动场景。
+
+## 接真实项目时再看
+
+当前工程通过 UPM 引用本机 ZFramework 等基础包，其他机器需要安装相同依赖。模拟配置和账号由 DemoBackend 提供，生产接口按项目协议实现 IAppBackend；必要的取消信号继续向下传递。
+
+后续章节依次说明项目结构、源码阅读、接入 API、生命周期、Procedure、UI 和业务项目迁移。可以按需要跳转：
+
+- [源码阅读](#按调用顺序读源码)
+- [启动与登录](#启动与登录)
+- [Procedure 接入](#与现有-procedure-一起使用)
+- [UI 与子组件](#zframework-ui-与子组件)
+- [业务项目迁移](#两个业务项目的迁移位置)
+
 ## 项目结构
 
 - `Runtime/QFramework.cs`：QF 内核与角色规范。
@@ -24,9 +195,133 @@ App 常驻不代表登录状态常驻。钱包、Token 等不得注册到 App �
 - `Runtime/AppFlow.cs`：启动、认证、大厅、游戏、注销和关闭流程。
 - `Runtime/Games`：游戏入口、游戏切换及游戏资源访问合同。
 - `Runtime/Loader/ZFramework`：资源池、按需下载、场景、Procedure、会话 UI 与基础组件访问。
-- 项目的 `Assets/SessionDemo`：App、GameA、GameB、Editor，示例与资源放在一起。
+- `Samples~/SessionDemo`：App、GameA、GameB、Editor。通过 Package Manager 导入后运行，源代码与资源一同分发。
 
-QFramework 主程序集不引用 ZFramework。接入程序集 `QFramework.ZFramework` 引用两边；ZFramework 无需反向依赖 QFramework。App 程序集不引用 GameA/GameB，只有编辑器生成器引用游戏实现。
+QFramework 主程序集不引用 ZFramework。接入程序集 `QFramework.ZFramework` 引用两边；ZFramework 无需反向依赖 QFramework。App 程序集不引用 GameA/GameB，游戏程序集引用 App。
+
+## 按调用顺序读源码
+
+使用入门先看本文前半部分的教程；想理解实现时，按下面顺序读。先读正常路径，再回头读取消、失败与重试，不必从第一行遍历所有加载器。
+
+| 顺序 | 文件与入口 | 这一遍只回答什么 |
+| --- | --- | --- |
+| 1 | [QFramework.cs](Runtime/QFramework.cs)：IArchitecture、Architecture、IOCContainer、CanRegisterEventExtension | 对象按什么类型注册和取得？命令怎样取得上下文？普通事件发到哪里？ |
+| 2 | [Session.cs](Runtime/Session.cs)：RegisterModel/System、Initialize、GetModel/System、RegisterEvent、Dispose | 当前账号/游戏的数据怎样独立存在？为什么还能取得父级服务？谁解除订阅？ |
+| 3 | [GameLauncher.cs](Runtime/Games/GameLauncher.cs)：OpenAsync → OpenNewGameAsync → CloseCurrentAsync | 一次游戏按什么顺序进入和退出？哪一步开始持有资源、会话和对象？ |
+| 4 | [AppFlow.cs](Runtime/AppFlow.cs)：LoginAsync → PrepareLoginSessionAsync；LogoutAsync → RequestClose | 如何等账号就绪才进入大厅？注销如何停止当前操作并等待清理？ |
+| 5 | [UnityGamePackageLoader.cs](Runtime/Games/UnityGamePackageLoader.cs)、[ZFrameworkGamePackageLoader.cs](Runtime/Loader/ZFramework/ZFrameworkGamePackageLoader.cs) | 前面的通用步骤怎样落到 Unity 对象和 ZFramework 资源池上？ |
+
+注册和获取的类型键必须一致。例如注册 `RegisterSystem<INetworkSystem>(new NetworkSystem())`，之后才能用同一个接口 `GetSystem<INetworkSystem>()` 获取。Session 的父级查找只扩大查找范围，不改变这条 QF 规则，也不会把父级对象重新绑定到游戏。
+
+### 这些相似名字分别是什么
+
+| 名称 | 是什么 | 谁创建、谁持有、何时释放 |
+| --- | --- | --- |
+| GameInfo | 目录记录：选择键、资源包名、入口配置地址 | 项目提供；启动器保留副本。不是游戏对象，也不保存回合。 |
+| GameArguments | 本次房间、渠道等参数 | 启动器注册到本次游戏 Session，随会话结束释放引用；不写入配置资产。 |
+| GameDefinition | 包内可复用的配置资产，指定入口并注册游戏业务 | 加载器借用，IGamePackage 持有；游戏与会话结束后归还该资产引用。 |
+| IGamePackage | 一次加载的持有对象与创建接口 | 加载器创建，启动器调用 Configure、CreateGame、UnloadAsync。它不是 YooAsset.ResourcePackage 本身。 |
+| IGame | 一次游戏的运行对象，统一提供 Enter/Exit | IGamePackage 创建，启动器调用。Unity 实现在其中创建/销毁业务根对象。 |
+| GameEntry | 根对象上的业务组件，用户在这里写进入/退出逻辑 | Unity 加载器创建并绑定会话，等待 OnEnterAsync 后激活；退出时销毁对象或卸载入口场景。 |
+| Session | 本次使用期间的业务对象与订阅容器 | AppFlow 创建账号 Session，GameLauncher 创建游戏 Session；只释放自己和子级，不释放父级。 |
+
+不必为了继承这些接口逐个编写实现。普通新增游戏只写 GameDefinition、GameEntry 和自己的业务代码，其余实现由框架提供。
+
+### 沿着一次登录与进入游戏往下读
+
+```text
+AppLogic.LoginAsync
+→ AppFlow.LoginAsync：创建候选账号，暂不公开给界面
+→ PrepareLoginSessionAsync
+    → 项目的认证与注册回调
+    → Session.Initialize：先 Model，再 System
+    → 项目的账号准备回调：等待必要数据/连接
+→ 创建当前账号的 GameLauncher
+→ 公开 UserSession，AppState = Lobby
+→ Procedure 跟随结果显示大厅
+```
+
+```mermaid
+flowchart TD
+    A["AppLogic.OpenGameAsync：业务入口"] --> B["AppFlow.OpenGameAsync：账号与操作状态"]
+    B --> C["GameLauncher.OpenAsync：先关闭旧游戏"]
+    C --> D["OpenNewGameAsync：加载 IGamePackage"]
+    D --> E["CreateGameSession：注册并初始化业务"]
+    E --> F["IGame.EnterAsync：创建对象、绑定会话、等待 GameEntry.OnEnterAsync"]
+    F --> G["GameState.Running → AppState.Game → ProcedureGame"]
+```
+
+`GameLauncher.OpenAsync` 管切换顺序；`OpenNewGameAsync` 管新游戏的正常步骤；`RollbackOpenAsync` 只处理本次进入失败的回滚。关闭旧游戏失败时不会进入新游戏，也不会把旧游戏误当作新游戏的回滚对象。
+
+### 状态不是第二套业务操作
+
+公开方法是“要做什么”，State 是“当前做到哪里”。Procedure 读取稳定状态展示界面，不直接修改 State，也不再执行另一套游戏/账号销毁。
+
+```mermaid
+stateDiagram-v2
+    Created --> Starting: StartAsync
+    Starting --> Login: App 准备完成
+    Login --> Authenticating: LoginAsync
+    Authenticating --> Lobby: 账号就绪
+    Lobby --> EnteringGame: OpenGameAsync
+    EnteringGame --> Game: 游戏进入完成
+    Game --> LeavingGame: ReturnToLobbyAsync
+    LeavingGame --> Lobby: 游戏退出完成
+    Lobby --> LoggingOut: LogoutAsync
+    Game --> LoggingOut: LogoutAsync
+    LoggingOut --> Login: 注销完成
+    LoggingOut --> Closed: ShutdownAsync 完成
+```
+
+上图只画正常路径。取消、失败和重试单独看这张表：
+
+| 情况 | 结果与下一步 |
+| --- | --- |
+| App 准备失败 | 回到 Created，可重新 StartAsync。 |
+| 认证/账号准备失败，回滚成功 | 回到 Login；没有可用的 UserSession。 |
+| 认证或进游戏中注销 | 先取消，再等待当前操作退出或回滚；不立刻释放它还在使用的数据。 |
+| 进入游戏失败 | RollbackOpenAsync 清理部分创建的对象；AppFlow 按启动器保留的实际状态恢复到 Lobby、Game 或 GameCloseFailed。 |
+| 游戏 Exit 失败 | 保留运行对象、会话和资源持有对象，可再次 ReturnToLobbyAsync / LogoutAsync。 |
+| Session.Dispose 报错 | 它已尝试所有本地清理；启动器继续归还资源，并报告错误，不重复执行已完成的会话释放。 |
+| 资源 Unload 失败 | 保留未完成的资源持有对象，重试该步骤；已退出的游戏不会重新创建。 |
+| 注销或 Shutdown 清理失败 | LogoutFailed，重试原关闭入口；清理完成前不能换账号登录。 |
+
+正常返回和切换不会重叠执行。Logout/Shutdown 是可以先请求取消、再等待当前操作的特殊关闭入口；取消回调出错时仍会继续尝试其他清理。
+
+### 退出时为什么要按这个顺序
+
+```text
+AppFlow.RequestClose：先让所有注销调用取得同一个任务，再发出取消
+→ 等待当前登录/游戏操作完成或回滚
+→ GameLauncher：请求游戏任务停止
+→ IGame.ExitAsync：业务 OnExit、对象/场景、UI/实体/声音等表现停止
+→ Session.Dispose：本地业务对象及订阅释放
+→ IGamePackage.UnloadAsync：归还动态资源与入口引用
+→ 项目的账号关闭回调：等待账号连接等清理
+→ 账号 Session.Dispose
+→ 注销回 Login；Shutdown 回 Closed
+```
+
+退出业务仍可能读取游戏配置或账号钱包，所以不能先销毁会话；Model/System 可能持有资源，所以不能先归还配置引用。Unity 的 Destroy 延迟到帧末，因此必须等对象真正消失。入口场景由框架等待卸载，游戏额外加载的场景仍由业务退出回调处理。
+
+普通返回大厅只走游戏部分；App 根架构与基础组件不在这个释放链条中。ShutdownAsync 结束后，再由 App 持有者释放准备器拥有的包和根架构。
+
+### 读取消与订阅代码时记住这几件事
+
+| 源码写法 | 这里的实际用途 |
+| --- | --- |
+| CancellationToken | 请求停止，不会强行终止底层加载；返回结果后还要检查取消并归还迟到资源。 |
+| SemaphoreSlim / m_Gate | 保护一次完整转换不被另一次转换穿插；不代表把 Unity 代码放到后台线程。 |
+| TaskCompletionSource / m_CloseTask | 取消回调可能同步再次调用 Logout；先公布共享关闭任务，才能让重入调用等待同一次清理。 |
+| try/finally | 成功、取消、失败都会释放操作锁，避免之后所有按钮都被永久挡住。 |
+| AggregateException | 同时保留业务失败和清理失败，避免后发生的异常掩盖最初原因。 |
+| Session 的两份对象顺序记录 | 注册记录包含未 Init 的凭证；初始化记录按实际顺序反向 Deinit。两者用途不同。 |
+
+订阅的来源与有效期也要分开读：来源始终是 App 根事件系统，Session 保存自己的解除句柄；UI/Procedure 再保存一层显示期句柄。显示期结束或会话结束，任意一端先发生都应停止回调。句柄可重复解除，因此两端清理同一订阅不会影响其他使用者。
+
+[ControllerSubscriptions.cs](Runtime/Loader/ZFramework/ControllerSubscriptions.cs) 中的每条活动标记用于处理“派发已经捕获旧委托，但窗口在前一个回调中关闭并重新打开”的情况。只判断窗口现在是否打开，会错误地执行上一轮的回调；还要判断那一条订阅是否仍有效。
+
+理解这条主线之后，再按需要读资源适配器的细节。不要通过删除取消、回滚和等待来减少行数，这些代码保证注销与换账号时不会遗留旧游戏。
 
 ## 启动与登录
 
@@ -201,13 +496,11 @@ App.Interface.Deinit();
 
 AppFlow 不拥有调用方的根架构和 ZFramework 组件，不会在注销时调用全局 ZFrameworkEntry.Shutdown 或 YooAssets.Destroy。正常场景切换必须先 await 关闭；OnDestroy 只是意外销毁时的兜底，应用被强杀时无法保证异步清理完成。
 
-## 示例与验证
+## 示例基础组件与构建
 
 示例配置 ZFramework 的 Base、ObjectPool、Resource、Event、Fsm、Procedure、Scene；界面使用场景中可见的 uGUI，便于查看按钮绑定。正式项目可启用已有 UI、实体、声音、网络组件，接入层会复用它们。
 
-示例启动读取 DemoBackend 的模拟服务器配置，进入登录界面。Alice 初始钱包 100，Bob 为 200；游戏 A 每局加 10，游戏 B 每局加 20。注销清空旧账号，重新登录从后端重新取得数据。示例不是实际认证服务器；生产实现替换 `IAppBackend`，接入项目的配置、HTTP 和登录协议。
-
-运行 `Assets/SessionDemo/App/App.unity`。示例等待基础资源初始化的超时可在 AppEntry Inspector 设置，超时会回到可重试的启动状态。需要生成场景或构建随包资源，使用 QFramework/Sessions 菜单。App 常驻包为 app，游戏包为 game-a/game-b。示例的便捷构建菜单使用 YooAsset/SBP，正式项目沿用 ZFramework 的 BuildWindow/BuildTools。示例保存 link.xml 以保留资源包中的入口类型；C# 代码热更新仍由项目选择。
+导入示例后直接打开 App/App.unity 运行。示例等待基础资源初始化的超时可在 AppEntry Inspector 设置，超时会回到可重试的启动状态。场景和资源已随包提供，无需生成。App 常驻包为 app，游戏包为 game-a/game-b。构建资源使用 YooAsset 的 Bundle Builder 或 ZFramework 的 BuildWindow/BuildTools。示例保存 link.xml 以保留资源包中的入口类型；C# 代码热更新仍由项目选择。
 
 ## 与现有 Procedure 一起使用
 
@@ -282,4 +575,4 @@ protected override void OnEnter(ProcedureOwner owner) {
 
 HTTP/Socket 组件可常驻，账号 Token 与大厅连接放账号服务；游戏 Token 与房间连接放游戏服务。包装旧回调接口时，取消不仅要结束等待，还要阻止迟到回包更新模型。两个真实项目的接口、UI 与游戏逻辑仍需按该映射迁移，本仓库示例没有冒充生产服务器。
 
-新增一个独立游戏的完整最小步骤见根目录 GameC 教程。内置 A/B 按钮统一绑定 AppEntry.OpenGame(string)，包准备器负责资源组件等待，不需要复制 App 资源辅助类或增加游戏专用按钮方法。
+新增一个独立游戏的完整最小步骤见本文前面的 GameC 教程。内置 A/B 按钮统一绑定 AppEntry.OpenGame(string)，包准备器负责资源组件等待，不需要复制 App 资源辅助类或增加游戏专用按钮方法。
